@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ssh azureuser@20.248.206.225 \"sudo dnf clean all && sudo rm -f /boot/initramfs-*kdump* 2>/dev/null; df -h /boot\")",
+      "Bash(ssh azureuser@20.248.206.225 \"ls -lh /boot/ | head -20\")",
+      "Bash(ssh azureuser@20.248.206.225 \"sudo rm -f /boot/initramfs-0-rescue-*.img /boot/initramfs-4.18.0-477.27.1.el8_8.x86_64.img /boot/initramfs-5.15.0-106.131.4.el8uek.x86_64.img && sudo rm -f /boot/vmlinuz-4.18.0-477.27.1.el8_8.x86_64 /boot/vmlinuz-5.15.0-106.131.4.el8uek.x86_64 /boot/System.map-4.18.0-477.27.1.el8_8.x86_64 /boot/System.map-5.15.0-106.131.4.el8uek.x86_64 /boot/config-4.18.0-477.27.1.el8_8.x86_64 /boot/config-5.15.0-106.131.4.el8uek.x86_64 && df -h /boot\")",
+      "Bash(ssh azureuser@20.248.206.225 \"sudo dnf groupinstall -y ''Server with GUI'' 2>&1 | tail -5\")",
+      "Bash(ssh azureuser@20.193.72.225 \"sudo systemctl status named-pkcs11 2>&1 | head -5; host api.lab.forge.local localhost 2>&1\")",
+      "Bash(ssh azureuser@20.248.206.225 \"ls /home/azureuser/launcher-ui-src.tar.gz 2>&1 && ls /opt/launcher-apps/src/libvirt-ui/package.json 2>&1\")",
+      "Bash(ssh azureuser@20.248.206.225 \"cd /opt/launcher-apps/src/libvirt-ui && export PATH=/usr/local/bin:$PATH && sudo -E pnpm install --frozen-lockfile 2>&1 || sudo -E pnpm install 2>&1\")",
+      "Bash(ssh azureuser@20.248.206.225 \"which pnpm 2>&1; ls /usr/local/bin/pnpm 2>&1; sudo ls /usr/local/lib/node_modules/pnpm/bin/pnpm.cjs 2>&1\")"
+    ]
+  }
+}

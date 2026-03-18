@@ -1,0 +1,45 @@
+version: "3.9"
+
+services:
+  keycloak-db:
+    image: postgres:15
+    container_name: keycloak-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: keycloak
+      POSTGRES_USER: keycloak
+      POSTGRES_PASSWORD: keycloak
+    volumes:
+      - keycloak_db_data:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:22.0.2
+    container_name: keycloak
+    restart: unless-stopped
+    command: start-dev
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://keycloak-db:5432/keycloak
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: keycloak
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_HOSTNAME: __HOSTNAME__
+      KC_HOSTNAME_PORT: "9443"
+      KC_HOSTNAME_STRICT_HTTPS: "false"
+      KC_HTTPS_ENABLED: "false"
+      KC_HTTP_ENABLED: "true"
+      KC_PROXY: edge
+      # FreeIPA LDAP federation settings (configure via admin UI after startup)
+      # Connection URL: ldap://__HOSTNAME__
+      # Users DN: cn=users,cn=accounts,dc=lab,dc=forge,dc=local
+    ports:
+      - "9080:8080"
+      - "9443:8443"
+    depends_on:
+      - keycloak-db
+
+volumes:
+  keycloak_db_data:

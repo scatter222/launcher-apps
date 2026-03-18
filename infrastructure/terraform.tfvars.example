@@ -1,0 +1,13 @@
+# Copy this to terraform.tfvars and fill in your values
+ssh_public_key       = "ssh-rsa AAAA... your-key"
+ssh_private_key_path = "~/.ssh/id_rsa"
+
+# FreeIPA passwords (use strong passwords in production)
+ipa_admin_password = "ChangeMe123!"
+ipa_ds_password    = "ChangeMe456!"
+
+# Optional overrides
+# instance_name = "launcher-env"
+# location      = "australiaeast"
+# vm_size       = "Standard_D4s_v3"
+# domain_name   = "lab.forge.local"
