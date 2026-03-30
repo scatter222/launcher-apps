@@ -9,6 +9,11 @@ set -euo pipefail
 CREDS_FILE="$1"
 source "${CREDS_FILE}"
 
+# Background heartbeat to keep SSH alive during long dnf/dotnet operations.
+(while true; do echo "... heartbeat $(date +%H:%M:%S)"; sleep 60; done) &
+HEARTBEAT_PID=$!
+trap "kill ${HEARTBEAT_PID} 2>/dev/null" EXIT
+
 HOSTNAME="api.${DOMAIN}"
 IPA_SERVER="idm.${DOMAIN}"
 HOME_DIR="/home/${ADMIN_USER}"

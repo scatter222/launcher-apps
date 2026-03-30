@@ -8,6 +8,14 @@ set -euo pipefail
 CREDS_FILE="$1"
 source "${CREDS_FILE}"
 
+# Start a background heartbeat to keep the SSH connection alive.
+# Long-running dnf/ipa operations can produce no output for 10+ minutes,
+# causing Azure's load balancer to kill the idle TCP connection.
+# This prints a dot every 60s so Terraform sees activity.
+(while true; do echo "... heartbeat $(date +%H:%M:%S)"; sleep 60; done) &
+HEARTBEAT_PID=$!
+trap "kill ${HEARTBEAT_PID} 2>/dev/null" EXIT
+
 HOSTNAME="idm.${DOMAIN}"
 PRIVATE_IP="10.0.1.10"
 API_IP="10.0.1.11"

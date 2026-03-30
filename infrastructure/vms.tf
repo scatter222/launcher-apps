@@ -5,7 +5,7 @@ locals {
   oracle_image = {
     publisher = "Oracle"
     offer     = "Oracle-Linux"
-    sku       = "ol88-lvm-gen2"
+    sku       = "ol810-lvm-gen2"
     version   = "latest"
   }
 }

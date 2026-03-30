@@ -9,6 +9,12 @@ set -euo pipefail
 CREDS_FILE="$1"
 source "${CREDS_FILE}"
 
+# Background heartbeat to keep SSH alive during long dnf operations.
+# "Server with GUI" installs 800+ packages and can be silent for 20+ min.
+(while true; do echo "... heartbeat $(date +%H:%M:%S)"; sleep 60; done) &
+HEARTBEAT_PID=$!
+trap "kill ${HEARTBEAT_PID} 2>/dev/null" EXIT
+
 HOSTNAME="ws1.${DOMAIN}"
 IPA_SERVER="idm.${DOMAIN}"
 HOME_DIR="/home/${ADMIN_USER}"
@@ -149,7 +155,11 @@ dnf install -y \
   cups-libs \
   xdg-utils \
   libxkbcommon \
-  xorg-x11-server-Xvfb
+  xorg-x11-server-Xvfb \
+  rpm-build \
+  dpkg \
+  fakeroot \
+  git
 
 # -------------------------------------------------
 # Step 6: Extract source and build launcher
