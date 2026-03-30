@@ -53,10 +53,18 @@ EOF
 echo "[2/9] Installing prerequisites..."
 
 dnf install -y oracle-epel-release-el8
+
+# Clean up /boot before installing packages (Oracle Linux /boot fills up quickly)
+rm -f /boot/initramfs-0-rescue-*.img 2>/dev/null || true
+dnf install -y dnf-utils || true
+package-cleanup --oldkernels --count=1 -y 2>/dev/null || true
+dnf clean all
+
 dnf install -y \
   ipa-client \
   krb5-workstation \
   nginx \
+  bind-utils \
   curl \
   wget \
   jq \
@@ -67,6 +75,18 @@ dnf install -y \
 # Step 3: Join FreeIPA domain
 # -------------------------------------------------
 echo "[3/9] Joining FreeIPA domain..."
+
+# Wait for FreeIPA DNS to be reachable before attempting domain join.
+# The identity server provisioner just finished but DNS may need a moment.
+echo "Waiting for FreeIPA DNS to respond..."
+for i in $(seq 1 30); do
+  if host "${IPA_SERVER}" "${IPA_SERVER_IP}" &>/dev/null; then
+    echo "FreeIPA DNS is ready."
+    break
+  fi
+  echo "  Attempt ${i}/30 — DNS not ready, waiting 10s..."
+  sleep 10
+done
 
 ipa-client-install \
   --unattended \

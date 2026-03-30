@@ -47,15 +47,27 @@ resource "azurerm_network_security_group" "main" {
     destination_address_prefix = "*"
   }
 
-  # Keycloak admin console
+  # Keycloak admin console (remapped to 9080/9443 to avoid Dogtag PKI conflict on 8080/8443)
   security_rule {
-    name                       = "Keycloak"
+    name                       = "Keycloak-HTTP"
     priority                   = 1003
     direction                  = "Inbound"
     access                     = "Allow"
     protocol                   = "Tcp"
     source_port_range          = "*"
-    destination_port_range     = "8443"
+    destination_port_range     = "9080"
+    source_address_prefix      = "*"
+    destination_address_prefix = "*"
+  }
+
+  security_rule {
+    name                       = "Keycloak-HTTPS"
+    priority                   = 1005
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    destination_port_range     = "9443"
     source_address_prefix      = "*"
     destination_address_prefix = "*"
   }

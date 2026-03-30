@@ -45,7 +45,7 @@ resource "null_resource" "provision_identity" {
     user        = var.admin_username
     private_key = file(var.ssh_private_key_path)
     host        = azurerm_public_ip.identity.ip_address
-    timeout     = "10m"
+    timeout     = "30m"
   }
 
   # Upload credentials file (avoids sensitive vars on command line)
@@ -70,10 +70,13 @@ resource "null_resource" "provision_identity" {
     destination = "/home/${var.admin_username}/docker-compose.keycloak.yml"
   }
 
+  # Run script with output logging. The script produces regular output which
+  # keeps the SSH connection alive. Logging to file provides a record if
+  # troubleshooting is needed.
   provisioner "remote-exec" {
     inline = [
       "chmod +x /home/${var.admin_username}/setup-identity.sh",
-      "sudo /home/${var.admin_username}/setup-identity.sh /home/${var.admin_username}/.setup-creds",
+      "sudo bash -c '/home/${var.admin_username}/setup-identity.sh /home/${var.admin_username}/.setup-creds 2>&1 | tee /var/log/setup-identity.log'",
     ]
   }
 
@@ -94,7 +97,7 @@ resource "null_resource" "provision_api" {
     user        = var.admin_username
     private_key = file(var.ssh_private_key_path)
     host        = azurerm_public_ip.api.ip_address
-    timeout     = "10m"
+    timeout     = "20m"
   }
 
   # Upload credentials file
@@ -128,7 +131,7 @@ resource "null_resource" "provision_api" {
   provisioner "remote-exec" {
     inline = [
       "chmod +x /home/${var.admin_username}/setup-api.sh",
-      "sudo /home/${var.admin_username}/setup-api.sh /home/${var.admin_username}/.setup-creds",
+      "sudo bash -c '/home/${var.admin_username}/setup-api.sh /home/${var.admin_username}/.setup-creds 2>&1 | tee /var/log/setup-api.log'",
     ]
   }
 
@@ -153,7 +156,7 @@ resource "null_resource" "provision_workstation" {
     user        = var.admin_username
     private_key = file(var.ssh_private_key_path)
     host        = azurerm_public_ip.workstation.ip_address
-    timeout     = "10m"
+    timeout     = "30m"
   }
 
   # Upload credentials file
@@ -179,10 +182,12 @@ resource "null_resource" "provision_workstation" {
     destination = "/home/${var.admin_username}/launcher-ui-src.tar.gz"
   }
 
+  # Workstation setup is the longest (~30+ min) due to "Server with GUI" group install.
+  # Output is tee'd to log file for troubleshooting.
   provisioner "remote-exec" {
     inline = [
       "chmod +x /home/${var.admin_username}/setup-workstation.sh",
-      "sudo /home/${var.admin_username}/setup-workstation.sh /home/${var.admin_username}/.setup-creds",
+      "sudo bash -c '/home/${var.admin_username}/setup-workstation.sh /home/${var.admin_username}/.setup-creds 2>&1 | tee /var/log/setup-workstation.log'",
     ]
   }
 

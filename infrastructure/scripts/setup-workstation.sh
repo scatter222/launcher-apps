@@ -55,6 +55,7 @@ dnf install -y oracle-epel-release-el8
 dnf install -y \
   ipa-client \
   krb5-workstation \
+  bind-utils \
   curl \
   wget \
   jq \
@@ -65,6 +66,17 @@ dnf install -y \
 # Step 3: Join FreeIPA domain
 # -------------------------------------------------
 echo "[3/7] Joining FreeIPA domain..."
+
+# Wait for FreeIPA DNS to be reachable before attempting domain join.
+echo "Waiting for FreeIPA DNS to respond..."
+for i in $(seq 1 30); do
+  if host "${IPA_SERVER}" "${IPA_SERVER_IP}" &>/dev/null; then
+    echo "FreeIPA DNS is ready."
+    break
+  fi
+  echo "  Attempt ${i}/30 — DNS not ready, waiting 10s..."
+  sleep 10
+done
 
 ipa-client-install \
   --unattended \

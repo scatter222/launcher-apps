@@ -38,6 +38,15 @@ EOF
 echo "[2/8] Installing prerequisites..."
 
 dnf install -y oracle-epel-release-el8
+
+# Clean up /boot before distro-sync to prevent "No space left on device" errors.
+# Oracle Linux LVM images have a small /boot partition (~800MB) that fills up
+# when dnf distro-sync installs new kernels + dracut regenerates initramfs.
+rm -f /boot/initramfs-0-rescue-*.img 2>/dev/null || true
+dnf install -y dnf-utils || true
+package-cleanup --oldkernels --count=1 -y 2>/dev/null || true
+dnf clean all
+
 dnf module enable -y idm:DL1
 dnf distro-sync -y
 
@@ -72,7 +81,6 @@ firewall-cmd --permanent --add-port=88/tcp
 firewall-cmd --permanent --add-port=88/udp
 firewall-cmd --permanent --add-port=464/tcp
 firewall-cmd --permanent --add-port=464/udp
-firewall-cmd --permanent --add-port=8443/tcp
 firewall-cmd --permanent --add-port=9080/tcp
 firewall-cmd --permanent --add-port=9443/tcp
 firewall-cmd --reload
