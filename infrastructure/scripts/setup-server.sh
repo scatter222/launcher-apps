@@ -66,6 +66,7 @@ dnf install -y \
   wget \
   jq \
   unzip \
+  policycoreutils-python-utils \
   qemu-kvm \
   libvirt \
   libvirt-devel \
@@ -91,6 +92,7 @@ firewall-cmd --permanent --add-port=88/tcp
 firewall-cmd --permanent --add-port=88/udp
 firewall-cmd --permanent --add-port=464/tcp
 firewall-cmd --permanent --add-port=464/udp
+firewall-cmd --permanent --add-port=9444/tcp
 firewall-cmd --permanent --add-port=9080/tcp
 firewall-cmd --permanent --add-port=9443/tcp
 firewall-cmd --reload
@@ -287,7 +289,10 @@ openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
 cp "${HOME_DIR}/nginx-api.conf" /etc/nginx/conf.d/api.conf
 rm -f /etc/nginx/conf.d/default.conf 2>/dev/null || true
 
+# SELinux: allow nginx to proxy and bind to port 9444
 setsebool -P httpd_can_network_connect 1 || true
+semanage port -a -t http_port_t -p tcp 9444 2>/dev/null || \
+  semanage port -m -t http_port_t -p tcp 9444 2>/dev/null || true
 
 # -------------------------------------------------
 # Step 13: Install and configure KVM/libvirt

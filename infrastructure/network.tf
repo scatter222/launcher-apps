@@ -47,6 +47,19 @@ resource "azurerm_network_security_group" "main" {
     destination_address_prefix = "*"
   }
 
+  # API HTTPS (nginx on 9444, since FreeIPA httpd uses 443 and Dogtag uses 8443)
+  security_rule {
+    name                       = "API-HTTPS"
+    priority                   = 1006
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    destination_port_range     = "9444"
+    source_address_prefix      = "*"
+    destination_address_prefix = "*"
+  }
+
   # Keycloak admin console (remapped to 9080/9443 to avoid Dogtag PKI conflict)
   security_rule {
     name                       = "Keycloak-HTTP"

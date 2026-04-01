@@ -218,7 +218,7 @@ echo "[7/7] Configuring API connection..."
 mkdir -p /opt/launcher-apps/src/libvirt-ui/config
 cat > /opt/launcher-apps/src/libvirt-ui/config/api.yaml <<EOF
 api:
-  baseUrl: https://api.${DOMAIN}
+  baseUrl: https://api.${DOMAIN}:9444
   timeout: 10000
   auth:
     method: negotiate
@@ -235,5 +235,5 @@ echo " Launcher: /opt/launcher-apps/src/libvirt-ui"
 echo ""
 echo " To test Kerberos auth:"
 echo "   kinit testuser@${REALM}"
-echo "   curl --negotiate -u : https://api.${DOMAIN}/api/user"
+echo "   curl --negotiate -u : https://api.${DOMAIN}:9444/api/user"
 echo "=========================================="
