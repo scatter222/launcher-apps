@@ -162,6 +162,25 @@ dnf install -y \
   git
 
 # -------------------------------------------------
+# Step 5b: Install VirtualBox for local VM management
+# -------------------------------------------------
+echo "[5b/7] Installing VirtualBox..."
+
+# Add Oracle VirtualBox repo
+dnf config-manager --add-repo https://download.virtualbox.org/virtualbox/rpm/el/virtualbox.repo || true
+
+# VirtualBox needs kernel headers for module build
+dnf install -y kernel-devel kernel-headers gcc make perl elfutils-libelf-devel || true
+
+# Install latest VirtualBox 7.x
+dnf install -y VirtualBox-7.1 || dnf install -y VirtualBox-7.0 || {
+  echo "VirtualBox installation failed — local VMs will not be available"
+}
+
+# Create the VM images directory
+mkdir -p /opt/launcher-apps/vms
+
+# -------------------------------------------------
 # Step 6: Extract source and build launcher
 # -------------------------------------------------
 echo "[6/7] Extracting source and building launcher..."

@@ -1,3 +1,4 @@
+using LauncherApi.Services;
 using Microsoft.AspNetCore.Authentication.Negotiate;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -12,6 +13,7 @@ builder.Services.AddAuthorization(options =>
     options.FallbackPolicy = options.DefaultPolicy;
 });
 
+builder.Services.AddSingleton<VmService>();
 builder.Services.AddControllers();
 
 var app = builder.Build();
