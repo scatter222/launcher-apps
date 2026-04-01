@@ -1,6 +1,5 @@
 # --- Provisioning ---
-# Identity server must be provisioned first (FreeIPA provides DNS + KDC),
-# then API server (domain join + API deploy),
+# Server must be provisioned first (FreeIPA provides DNS + KDC + API),
 # then workstation (domain join + launcher install).
 #
 # Source code is uploaded via tar archives (no git clone needed).
@@ -31,24 +30,25 @@ resource "null_resource" "create_launcher_tarball" {
   }
 }
 
-# --- Identity Server Provisioning ---
+# --- Server Provisioning (FreeIPA + API + KVM) ---
 
-resource "null_resource" "provision_identity" {
+resource "null_resource" "provision_server" {
   triggers = {
-    vm_id       = azurerm_linux_virtual_machine.identity.id
-    setup_sha   = filebase64sha256("${path.module}/scripts/setup-identity.sh")
+    vm_id       = azurerm_linux_virtual_machine.server.id
+    setup_sha   = filebase64sha256("${path.module}/scripts/setup-server.sh")
     compose_sha = filebase64sha256("${path.module}/docker-compose.keycloak.yml")
+    nginx_sha   = filebase64sha256("${path.module}/nginx-api.conf")
   }
 
   connection {
     type        = "ssh"
     user        = var.admin_username
     private_key = file(var.ssh_private_key_path)
-    host        = azurerm_public_ip.identity.ip_address
-    timeout     = "30m"
+    host        = azurerm_public_ip.server.ip_address
+    timeout     = "40m"
   }
 
-  # Upload credentials file (avoids sensitive vars on command line)
+  # Upload credentials file (all secrets needed for FreeIPA + API)
   provisioner "file" {
     content = join("\n", [
       "DOMAIN=${var.domain_name}",
@@ -61,60 +61,13 @@ resource "null_resource" "provision_identity" {
   }
 
   provisioner "file" {
-    source      = "${path.module}/scripts/setup-identity.sh"
-    destination = "/home/${var.admin_username}/setup-identity.sh"
+    source      = "${path.module}/scripts/setup-server.sh"
+    destination = "/home/${var.admin_username}/setup-server.sh"
   }
 
   provisioner "file" {
     source      = "${path.module}/docker-compose.keycloak.yml"
     destination = "/home/${var.admin_username}/docker-compose.keycloak.yml"
-  }
-
-  # Run script with output logging. The script produces regular output which
-  # keeps the SSH connection alive. Logging to file provides a record if
-  # troubleshooting is needed.
-  provisioner "remote-exec" {
-    inline = [
-      "chmod +x /home/${var.admin_username}/setup-identity.sh",
-      "sudo bash -c '/home/${var.admin_username}/setup-identity.sh /home/${var.admin_username}/.setup-creds 2>&1 | tee /var/log/setup-identity.log'",
-    ]
-  }
-
-  depends_on = [azurerm_linux_virtual_machine.identity]
-}
-
-# --- API Server Provisioning ---
-
-resource "null_resource" "provision_api" {
-  triggers = {
-    vm_id     = azurerm_linux_virtual_machine.api.id
-    setup_sha = filebase64sha256("${path.module}/scripts/setup-api.sh")
-    nginx_sha = filebase64sha256("${path.module}/nginx-api.conf")
-  }
-
-  connection {
-    type        = "ssh"
-    user        = var.admin_username
-    private_key = file(var.ssh_private_key_path)
-    host        = azurerm_public_ip.api.ip_address
-    timeout     = "20m"
-  }
-
-  # Upload credentials file
-  provisioner "file" {
-    content = join("\n", [
-      "DOMAIN=${var.domain_name}",
-      "REALM=${var.kerberos_realm}",
-      "IPA_ADMIN_PASSWORD=${var.ipa_admin_password}",
-      "ADMIN_USER=${var.admin_username}",
-      "IPA_SERVER_IP=10.0.1.10",
-    ])
-    destination = "/home/${var.admin_username}/.setup-creds"
-  }
-
-  provisioner "file" {
-    source      = "${path.module}/scripts/setup-api.sh"
-    destination = "/home/${var.admin_username}/setup-api.sh"
   }
 
   provisioner "file" {
@@ -128,17 +81,16 @@ resource "null_resource" "provision_api" {
     destination = "/home/${var.admin_username}/launcher-api-src.tar.gz"
   }
 
+  # Run script with output logging and heartbeat keepalive
   provisioner "remote-exec" {
     inline = [
-      "chmod +x /home/${var.admin_username}/setup-api.sh",
-      "sudo bash -c '/home/${var.admin_username}/setup-api.sh /home/${var.admin_username}/.setup-creds 2>&1 | tee /var/log/setup-api.log'",
+      "chmod +x /home/${var.admin_username}/setup-server.sh",
+      "sudo bash -c '/home/${var.admin_username}/setup-server.sh /home/${var.admin_username}/.setup-creds 2>&1 | tee /var/log/setup-server.log'",
     ]
   }
 
-  # API server depends on identity server being ready + tarball existing
   depends_on = [
-    azurerm_linux_virtual_machine.api,
-    null_resource.provision_identity,
+    azurerm_linux_virtual_machine.server,
     null_resource.create_api_tarball,
   ]
 }
@@ -182,8 +134,7 @@ resource "null_resource" "provision_workstation" {
     destination = "/home/${var.admin_username}/launcher-ui-src.tar.gz"
   }
 
-  # Workstation setup is the longest (~30+ min) due to "Server with GUI" group install.
-  # Output is tee'd to log file for troubleshooting.
+  # Workstation setup is long (~30+ min) due to "Server with GUI" group install.
   provisioner "remote-exec" {
     inline = [
       "chmod +x /home/${var.admin_username}/setup-workstation.sh",
@@ -191,10 +142,10 @@ resource "null_resource" "provision_workstation" {
     ]
   }
 
-  # Workstation depends on identity server being ready + tarball existing
+  # Workstation depends on server being ready + tarball existing
   depends_on = [
     azurerm_linux_virtual_machine.workstation,
-    null_resource.provision_identity,
+    null_resource.provision_server,
     null_resource.create_launcher_tarball,
   ]
 }

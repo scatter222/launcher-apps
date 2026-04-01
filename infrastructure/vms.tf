@@ -10,17 +10,17 @@ locals {
   }
 }
 
-# --- VM 1: Identity Server (FreeIPA + Keycloak) ---
+# --- VM 1: Server (FreeIPA + API + KVM) ---
 
-resource "azurerm_linux_virtual_machine" "identity" {
-  name                = "${var.instance_name}-identity"
+resource "azurerm_linux_virtual_machine" "server" {
+  name                = "${var.instance_name}-server"
   resource_group_name = azurerm_resource_group.main.name
   location            = azurerm_resource_group.main.location
-  size                = var.vm_size
+  size                = var.server_vm_size
   admin_username      = var.admin_username
 
   network_interface_ids = [
-    azurerm_network_interface.identity.id,
+    azurerm_network_interface.server.id,
   ]
 
   disable_password_authentication = true
@@ -33,7 +33,7 @@ resource "azurerm_linux_virtual_machine" "identity" {
   os_disk {
     caching              = "ReadWrite"
     storage_account_type = "Premium_LRS"
-    disk_size_gb         = var.disk_size_gb
+    disk_size_gb         = var.server_disk_size_gb
   }
 
   source_image_reference {
@@ -46,51 +46,11 @@ resource "azurerm_linux_virtual_machine" "identity" {
   tags = {
     environment = "testing"
     managed_by  = "terraform"
-    role        = "identity-server"
+    role        = "server"
   }
 }
 
-# --- VM 2: API Server (.NET Core API) ---
-
-resource "azurerm_linux_virtual_machine" "api" {
-  name                = "${var.instance_name}-api"
-  resource_group_name = azurerm_resource_group.main.name
-  location            = azurerm_resource_group.main.location
-  size                = var.vm_size
-  admin_username      = var.admin_username
-
-  network_interface_ids = [
-    azurerm_network_interface.api.id,
-  ]
-
-  disable_password_authentication = true
-
-  admin_ssh_key {
-    username   = var.admin_username
-    public_key = var.ssh_public_key
-  }
-
-  os_disk {
-    caching              = "ReadWrite"
-    storage_account_type = "Premium_LRS"
-    disk_size_gb         = var.disk_size_gb
-  }
-
-  source_image_reference {
-    publisher = local.oracle_image.publisher
-    offer     = local.oracle_image.offer
-    sku       = local.oracle_image.sku
-    version   = local.oracle_image.version
-  }
-
-  tags = {
-    environment = "testing"
-    managed_by  = "terraform"
-    role        = "api-server"
-  }
-}
-
-# --- VM 3: Workstation (Electron Launcher) ---
+# --- VM 2: Workstation (Electron Launcher) ---
 
 resource "azurerm_linux_virtual_machine" "workstation" {
   name                = "${var.instance_name}-workstation"

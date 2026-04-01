@@ -10,14 +10,26 @@ variable "location" {
   default     = "australiaeast"
 }
 
+variable "server_vm_size" {
+  description = "Azure VM size for the server (needs nested virt + RAM for KVM guests)."
+  type        = string
+  default     = "Standard_D8s_v3"
+}
+
+variable "server_disk_size_gb" {
+  description = "Server OS disk size in GB (stores KVM base images + overlays)."
+  type        = number
+  default     = 256
+}
+
 variable "vm_size" {
-  description = "Azure VM size for all VMs."
+  description = "Azure VM size for the workstation."
   type        = string
   default     = "Standard_D4s_v3"
 }
 
 variable "disk_size_gb" {
-  description = "OS disk size in GB."
+  description = "Workstation OS disk size in GB."
   type        = number
   default     = 128
 }

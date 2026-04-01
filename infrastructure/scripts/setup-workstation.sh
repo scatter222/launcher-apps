@@ -48,8 +48,8 @@ fi
 
 cat >> /etc/hosts <<EOF
 ${IPA_SERVER_IP}  ${IPA_SERVER} idm
-10.0.1.11         api.${DOMAIN} api
-10.0.1.12         ${HOSTNAME} ws1
+${IPA_SERVER_IP}  api.${DOMAIN} api
+10.0.1.11         ${HOSTNAME} ws1
 EOF
 
 # -------------------------------------------------
