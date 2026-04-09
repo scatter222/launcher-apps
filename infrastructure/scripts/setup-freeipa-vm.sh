@@ -66,21 +66,28 @@ dnf install -y \
 # -------------------------------------------------
 echo "[3/6] Configuring firewall..."
 
-systemctl enable --now firewalld
+# Restart dbus first — cloud-init environments may not have it fully ready,
+# causing firewalld to hang with DBus timeout errors.
+systemctl restart dbus 2>/dev/null || true
+sleep 2
 
-firewall-cmd --permanent --add-service=freeipa-ldap
-firewall-cmd --permanent --add-service=freeipa-ldaps
-firewall-cmd --permanent --add-service=freeipa-replication
-firewall-cmd --permanent --add-service=freeipa-trust
-firewall-cmd --permanent --add-service=dns
-firewall-cmd --permanent --add-service=ntp
-firewall-cmd --permanent --add-service=http
-firewall-cmd --permanent --add-service=https
-firewall-cmd --permanent --add-port=88/tcp
-firewall-cmd --permanent --add-port=88/udp
-firewall-cmd --permanent --add-port=464/tcp
-firewall-cmd --permanent --add-port=464/udp
-firewall-cmd --reload
+systemctl enable --now firewalld || true
+
+# Use || true on each rule — if firewalld hangs, we continue anyway.
+# FreeIPA's ipa-server-install will open the ports it needs.
+firewall-cmd --permanent --add-service=freeipa-ldap || true
+firewall-cmd --permanent --add-service=freeipa-ldaps || true
+firewall-cmd --permanent --add-service=freeipa-replication || true
+firewall-cmd --permanent --add-service=freeipa-trust || true
+firewall-cmd --permanent --add-service=dns || true
+firewall-cmd --permanent --add-service=ntp || true
+firewall-cmd --permanent --add-service=http || true
+firewall-cmd --permanent --add-service=https || true
+firewall-cmd --permanent --add-port=88/tcp || true
+firewall-cmd --permanent --add-port=88/udp || true
+firewall-cmd --permanent --add-port=464/tcp || true
+firewall-cmd --permanent --add-port=464/udp || true
+firewall-cmd --reload || true
 
 # -------------------------------------------------
 # Step 4: Install FreeIPA server

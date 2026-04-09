@@ -106,24 +106,36 @@ firewall-cmd --permanent --add-port=9444/tcp
 firewall-cmd --permanent --add-port=9080/tcp
 firewall-cmd --permanent --add-port=9443/tcp
 
-# Enable masquerading for DNAT forwarding
+# Enable masquerading
 firewall-cmd --permanent --add-masquerade
-
-# Port forwarding: identity traffic from Azure NIC -> FreeIPA guest
-for PORT in 53 88 464 389 636; do
-  firewall-cmd --permanent --add-forward-port="port=${PORT}:proto=tcp:toaddr=${FREEIPA_GUEST_IP}"
-  firewall-cmd --permanent --add-forward-port="port=${PORT}:proto=udp:toaddr=${FREEIPA_GUEST_IP}"
-done
-
-# TCP-only: HTTPS (FreeIPA web UI) and LDAPS
-firewall-cmd --permanent --add-forward-port="port=443:proto=tcp:toaddr=${FREEIPA_GUEST_IP}"
-firewall-cmd --permanent --add-forward-port="port=80:proto=tcp:toaddr=${FREEIPA_GUEST_IP}"
 
 firewall-cmd --reload
 
 # Enable IP forwarding
 sysctl -w net.ipv4.ip_forward=1
 echo "net.ipv4.ip_forward = 1" > /etc/sysctl.d/99-ip-forward.conf
+
+# DNAT rules: forward identity ports from Azure NIC to FreeIPA guest.
+# Using iptables directly because firewalld's forward-port on the nftables
+# backend does not generate proper DNAT rules for external traffic.
+for PORT in 53 88 464 389 636; do
+  for PROTO in tcp udp; do
+    iptables -t nat -A PREROUTING -d ${PRIVATE_IP} -p ${PROTO} --dport ${PORT} \
+      -j DNAT --to-destination ${FREEIPA_GUEST_IP}:${PORT}
+  done
+done
+for PORT in 443 80; do
+  iptables -t nat -A PREROUTING -d ${PRIVATE_IP} -p tcp --dport ${PORT} \
+    -j DNAT --to-destination ${FREEIPA_GUEST_IP}:${PORT}
+done
+iptables -t nat -A POSTROUTING -d ${FREEIPA_GUEST_IP} -j MASQUERADE
+iptables -I FORWARD -d ${FREEIPA_GUEST_IP} -j ACCEPT
+iptables -I FORWARD -s ${FREEIPA_GUEST_IP} -j ACCEPT
+
+# Persist iptables rules across reboots
+iptables-save > /etc/sysconfig/iptables
+dnf install -y iptables-services 2>/dev/null || true
+systemctl enable iptables 2>/dev/null || true
 
 # =================================================
 # PHASE B: KVM/libvirt setup + FreeIPA guest VM
@@ -161,14 +173,15 @@ mkdir -p /var/lib/libvirt/images/instances
 # -------------------------------------------------
 echo "[5/14] Downloading Oracle Linux 8 cloud image..."
 
-OL8_IMAGE_URL="https://yum.oracle.com/templates/OracleLinux/OL8/u10/x86_64/OL8U10_x86_64-kvm-cloud.qcow2"
+OL8_IMAGE_URL="https://yum.oracle.com/templates/OracleLinux/OL8/u10/x86_64/OL8U10_x86_64-kvm-b271.qcow2"
 BASE_IMAGE="/var/lib/libvirt/images/base/ol8-cloud.qcow2"
 
-if [ ! -f "${BASE_IMAGE}" ]; then
+if [ ! -f "${BASE_IMAGE}" ] || [ ! -s "${BASE_IMAGE}" ]; then
+  rm -f "${BASE_IMAGE}"
   wget -q --show-progress -O "${BASE_IMAGE}" "${OL8_IMAGE_URL}" || {
-    # Fallback: try the generic cloud image URL
+    # Fallback: AlmaLinux 8 generic cloud image (RHEL-compatible)
     wget -q --show-progress -O "${BASE_IMAGE}" \
-      "https://yum.oracle.com/templates/OracleLinux/OL8/u9/x86_64/OL8U9_x86_64-kvm-cloud.qcow2"
+      "https://repo.almalinux.org/almalinux/8/cloud/x86_64/images/AlmaLinux-8-GenericCloud-latest.x86_64.qcow2"
   }
 fi
 
@@ -180,8 +193,6 @@ echo "[6/14] Creating FreeIPA guest disk..."
 FREEIPA_DISK="/var/lib/libvirt/images/instances/freeipa.qcow2"
 
 qemu-img create -f qcow2 -b "${BASE_IMAGE}" -F qcow2 "${FREEIPA_DISK}"
-# Resize to 30GB so FreeIPA has room for its databases
-qemu-img resize "${FREEIPA_DISK}" 30G
 
 # -------------------------------------------------
 # Step 7: Generate cloud-init ISO
@@ -195,16 +206,25 @@ mkdir -p "${CLOUD_INIT_DIR}"
 cp "${HOME_DIR}/freeipa-network.yaml" "${CLOUD_INIT_DIR}/network-config"
 
 # Generate the user-data with credentials injected
+SSH_PUBKEY=$(cat "${HOME_DIR}/.ssh/id_rsa.pub" 2>/dev/null || ssh-keygen -t rsa -N '' -f "${HOME_DIR}/.ssh/id_rsa" -q && cat "${HOME_DIR}/.ssh/id_rsa.pub")
+
 cat > "${CLOUD_INIT_DIR}/user-data" <<USERDATA
 #cloud-config
 hostname: idm
 fqdn: idm.${DOMAIN}
 manage_etc_hosts: false
 
+ssh_authorized_keys:
+  - ${SSH_PUBKEY}
+
 users:
+  - default
   - name: root
     lock_passwd: false
-    hashed_passwd: ""
+    ssh_authorized_keys:
+      - ${SSH_PUBKEY}
+
+ssh_pwauth: true
 
 growpart:
   mode: auto
