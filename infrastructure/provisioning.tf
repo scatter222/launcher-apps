@@ -30,14 +30,16 @@ resource "null_resource" "create_launcher_tarball" {
   }
 }
 
-# --- Server Provisioning (FreeIPA + API + KVM) ---
+# --- Server Provisioning (KVM host + FreeIPA guest VM + API) ---
 
 resource "null_resource" "provision_server" {
   triggers = {
-    vm_id       = azurerm_linux_virtual_machine.server.id
-    setup_sha   = filebase64sha256("${path.module}/scripts/setup-server.sh")
-    compose_sha = filebase64sha256("${path.module}/docker-compose.keycloak.yml")
-    nginx_sha   = filebase64sha256("${path.module}/nginx-api.conf")
+    vm_id          = azurerm_linux_virtual_machine.server.id
+    setup_sha      = filebase64sha256("${path.module}/scripts/setup-server.sh")
+    freeipa_vm_sha = filebase64sha256("${path.module}/scripts/setup-freeipa-vm.sh")
+    network_sha    = filebase64sha256("${path.module}/cloud-init/freeipa-network.yaml")
+    compose_sha    = filebase64sha256("${path.module}/docker-compose.keycloak.yml")
+    nginx_sha      = filebase64sha256("${path.module}/nginx-api.conf")
   }
 
   connection {
@@ -45,10 +47,10 @@ resource "null_resource" "provision_server" {
     user        = var.admin_username
     private_key = file(var.ssh_private_key_path)
     host        = azurerm_public_ip.server.ip_address
-    timeout     = "40m"
+    timeout     = "60m"
   }
 
-  # Upload credentials file (all secrets needed for FreeIPA + API)
+  # Upload credentials file
   provisioner "file" {
     content = join("\n", [
       "DOMAIN=${var.domain_name}",
@@ -60,9 +62,22 @@ resource "null_resource" "provision_server" {
     destination = "/home/${var.admin_username}/.setup-creds"
   }
 
+  # Upload server host setup script
   provisioner "file" {
     source      = "${path.module}/scripts/setup-server.sh"
     destination = "/home/${var.admin_username}/setup-server.sh"
+  }
+
+  # Upload FreeIPA guest VM setup script (embedded into cloud-init by setup-server.sh)
+  provisioner "file" {
+    source      = "${path.module}/scripts/setup-freeipa-vm.sh"
+    destination = "/home/${var.admin_username}/setup-freeipa-vm.sh"
+  }
+
+  # Upload cloud-init network config for FreeIPA guest
+  provisioner "file" {
+    source      = "${path.module}/cloud-init/freeipa-network.yaml"
+    destination = "/home/${var.admin_username}/freeipa-network.yaml"
   }
 
   provisioner "file" {
@@ -81,7 +96,8 @@ resource "null_resource" "provision_server" {
     destination = "/home/${var.admin_username}/launcher-api-src.tar.gz"
   }
 
-  # Run script with output logging and heartbeat keepalive
+  # Run script with output logging and heartbeat keepalive.
+  # Timeout is longer because the FreeIPA guest VM install takes 15-25 min.
   provisioner "remote-exec" {
     inline = [
       "chmod +x /home/${var.admin_username}/setup-server.sh",

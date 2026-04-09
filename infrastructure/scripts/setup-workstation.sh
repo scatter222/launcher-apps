@@ -49,6 +49,7 @@ fi
 cat >> /etc/hosts <<EOF
 ${IPA_SERVER_IP}  ${IPA_SERVER} idm
 ${IPA_SERVER_IP}  api.${DOMAIN} api
+${IPA_SERVER_IP}  srv.${DOMAIN} srv
 10.0.1.11         ${HOSTNAME} ws1
 EOF
 
