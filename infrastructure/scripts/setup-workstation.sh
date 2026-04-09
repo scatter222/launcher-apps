@@ -170,13 +170,22 @@ echo "[5b/7] Installing VirtualBox..."
 # Add Oracle VirtualBox repo
 dnf config-manager --add-repo https://download.virtualbox.org/virtualbox/rpm/el/virtualbox.repo || true
 
-# VirtualBox needs kernel headers for module build
-dnf install -y kernel-devel kernel-headers gcc make perl elfutils-libelf-devel || true
+# VirtualBox needs kernel headers matching the running kernel for module build.
+# Oracle Linux may boot the UEK kernel, so install headers for whichever is running.
+RUNNING_KERNEL=$(uname -r)
+if echo "${RUNNING_KERNEL}" | grep -q uek; then
+  dnf install -y "kernel-uek-devel-${RUNNING_KERNEL}" gcc make perl elfutils-libelf-devel || true
+else
+  dnf install -y kernel-devel kernel-headers gcc make perl elfutils-libelf-devel || true
+fi
 
 # Install latest VirtualBox 7.x
 dnf install -y VirtualBox-7.1 || dnf install -y VirtualBox-7.0 || {
   echo "VirtualBox installation failed — local VMs will not be available"
 }
+
+# Build and load VBox kernel modules
+/sbin/vboxconfig 2>&1 || echo "vboxconfig failed — VMs will not start until modules are built"
 
 # Create the VM images directory
 mkdir -p /opt/launcher-apps/vms
