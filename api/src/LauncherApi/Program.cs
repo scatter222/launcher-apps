@@ -1,3 +1,4 @@
+using LauncherApi.Models;
 using LauncherApi.Services;
 using Microsoft.AspNetCore.Authentication.Negotiate;
 
@@ -14,6 +15,8 @@ builder.Services.AddAuthorization(options =>
 });
 
 builder.Services.AddSingleton<VmService>();
+builder.Services.Configure<YaraSettings>(builder.Configuration.GetSection("YaraSettings"));
+builder.Services.AddSingleton<YaraService>();
 builder.Services.AddControllers();
 
 var app = builder.Build();
