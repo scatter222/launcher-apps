@@ -15,8 +15,15 @@ builder.Services.AddAuthorization(options =>
 });
 
 builder.Services.AddSingleton<VmService>();
-builder.Services.Configure<YaraSettings>(builder.Configuration.GetSection("YaraSettings"));
-builder.Services.AddSingleton<YaraService>();
+
+// Detection-rules service (Suricata, YARA, Zeek, ...) - configured via the
+// "RuleSets" array in appsettings.json.
+var ruleSets = builder.Configuration
+    .GetSection("RuleSets")
+    .Get<List<RuleSetConfig>>() ?? new List<RuleSetConfig>();
+builder.Services.AddSingleton<IReadOnlyList<RuleSetConfig>>(ruleSets);
+builder.Services.AddSingleton<RulesService>();
+
 builder.Services.AddControllers();
 
 var app = builder.Build();
