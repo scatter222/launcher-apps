@@ -14,6 +14,11 @@ public class RuleSetConfig
     // Optional. When present, the launcher can ask the API to restart the
     // associated service inside a libvirt guest VM via the QEMU guest agent.
     public RestartConfig? Restart { get; set; }
+
+    // Optional. When present, file ownership and mode are enforced on every
+    // upload so files created via the API match what the consuming service
+    // (e.g. Suricata, Zeek) needs to read them.
+    public PermissionsConfig? Permissions { get; set; }
 }
 
 // How to restart a rule-consuming service inside a libvirt guest. The API
@@ -28,6 +33,23 @@ public class RestartConfig
     public string Description { get; set; } = string.Empty;
 }
 
+// Unix file ownership / mode to apply on rule files after writing.
+//
+// Owner / Group accept either a name ("suricata") or a numeric id ("1000")
+// because chown supports both. FileMode / DirectoryMode are octal strings
+// (e.g. "0644", "644", "0755").
+//
+// All fields are optional; leave one blank to skip that aspect. Note that
+// changing ownership to a user other than the API's effective uid normally
+// requires the API to run as root (or have CAP_CHOWN).
+public class PermissionsConfig
+{
+    public string? Owner { get; set; }
+    public string? Group { get; set; }
+    public string? FileMode { get; set; }
+    public string? DirectoryMode { get; set; }
+}
+
 public class RuleSetSummary
 {
     public string Id { get; set; } = string.Empty;
@@ -40,6 +62,12 @@ public class RuleSetSummary
     public bool RestartAvailable { get; set; }
     public string? RestartDescription { get; set; }
     public string? RestartVmName { get; set; }
+
+    // Reported back so the launcher can show users what policy will be
+    // applied to files they upload (optional, may be null).
+    public string? Owner { get; set; }
+    public string? Group { get; set; }
+    public string? FileMode { get; set; }
 }
 
 public class RuleFileSummary

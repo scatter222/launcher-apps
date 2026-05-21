@@ -82,6 +82,9 @@ public class RulesController : ControllerBase
                 => StatusCode(StatusCodes.Status413PayloadTooLarge, new { error }),
             RulesService.WriteResult.UnknownSet
                 => NotFound(new { error }),
+            RulesService.WriteResult.PermissionError
+                => StatusCode(StatusCodes.Status500InternalServerError,
+                    new { name = upload.Name, status = "permission_error", error }),
             _ => StatusCode(StatusCodes.Status500InternalServerError, new { error = "Unknown error." })
         };
     }
