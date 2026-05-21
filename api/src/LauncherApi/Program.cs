@@ -23,6 +23,7 @@ var ruleSets = builder.Configuration
     .Get<List<RuleSetConfig>>() ?? new List<RuleSetConfig>();
 builder.Services.AddSingleton<IReadOnlyList<RuleSetConfig>>(ruleSets);
 builder.Services.AddSingleton<RulesService>();
+builder.Services.AddSingleton<GuestAgentService>();
 
 builder.Services.AddControllers();
 

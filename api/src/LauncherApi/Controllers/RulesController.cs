@@ -18,10 +18,12 @@ namespace LauncherApi.Controllers;
 public class RulesController : ControllerBase
 {
     private readonly RulesService _rules;
+    private readonly GuestAgentService _guestAgent;
 
-    public RulesController(RulesService rules)
+    public RulesController(RulesService rules, GuestAgentService guestAgent)
     {
         _rules = rules;
+        _guestAgent = guestAgent;
     }
 
     [HttpGet("sets")]
@@ -92,5 +94,22 @@ public class RulesController : ControllerBase
             return NotFound(new { error });
         }
         return NoContent();
+    }
+
+    // Restart the rule-consuming service (Suricata, Zeek, ...) inside the
+    // libvirt guest configured for this rule set, via the QEMU guest agent.
+    [HttpPost("{setId}/restart")]
+    public async Task<IActionResult> Restart(string setId, CancellationToken ct)
+    {
+        var set = _rules.FindSet(setId);
+        if (set is null) return NotFound(new { error = "Unknown rule set." });
+        if (set.Restart is null || string.IsNullOrWhiteSpace(set.Restart.VmName))
+        {
+            return BadRequest(new { error = "Restart is not configured for this rule set." });
+        }
+
+        var result = await _guestAgent.RunAsync(set.Restart, ct);
+        if (result.Success) return Ok(result);
+        return StatusCode(StatusCodes.Status502BadGateway, result);
     }
 }

@@ -32,7 +32,10 @@ public class RulesService
             Description = s.Description,
             Directory = s.Directory,
             AllowedExtensions = s.AllowedExtensions,
-            MaxFileSizeBytes = s.MaxFileSizeBytes
+            MaxFileSizeBytes = s.MaxFileSizeBytes,
+            RestartAvailable = s.Restart is not null && !string.IsNullOrWhiteSpace(s.Restart.VmName),
+            RestartDescription = s.Restart?.Description,
+            RestartVmName = s.Restart?.VmName
         })
         .ToList();
 
