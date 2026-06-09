@@ -1,0 +1,9 @@
+# Build output
+bin/
+obj/
+
+# Runtime SQLite database (and WAL/SHM sidecar files)
+data/
+*.db
+*.db-wal
+*.db-shm
