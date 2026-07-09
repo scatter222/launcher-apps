@@ -218,8 +218,8 @@ API and workstation provision **in parallel** after identity completes, since bo
 |--------|------|------|---------|
 | `GET` | `/api/health` | Anonymous | Health check — returns 200 if API is running |
 | `GET` | `/api/user` | Negotiate | Returns authenticated user's Kerberos principal and claims |
-| `GET` | `/api/tools` | Negotiate | Lists available cybersecurity tools |
-| `POST` | `/api/tools/{id}/launch` | Negotiate | Audit log entry for tool launch |
+| `GET` | `/api/tools` | Negotiate | Tool catalog for exploration (explore-only); filter with `?system=` / `?category=` |
+| `GET` | `/api/tools/systems` | Negotiate | Lists the systems/VMs that host tools |
 | `GET` | `/api/session` | Negotiate | Server environment information |
 
 All endpoints except `/api/health` require Kerberos authentication (enforced via `FallbackPolicy = DefaultPolicy`).

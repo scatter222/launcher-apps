@@ -80,8 +80,8 @@ No passwords are transmitted. The Kerberos ticket from domain login is used tran
 |--------|------|------|---------|
 | GET | `/api/health` | Anonymous | Health check |
 | GET | `/api/user` | Negotiate | Authenticated user info |
-| GET | `/api/tools` | Negotiate | Available tools list |
-| POST | `/api/tools/{id}/launch` | Negotiate | Audit tool launch |
+| GET | `/api/tools` | Negotiate | Tool catalog (explore-only); optional `?system=` / `?category=` filters |
+| GET | `/api/tools/systems` | Negotiate | Systems/VMs that host tools |
 | GET | `/api/session` | Negotiate | Server environment info |
 
 **Nginx Reverse Proxy**
@@ -157,9 +157,11 @@ Restart=always
 | `src/LauncherApi/appsettings.json` | Logging config |
 | `src/LauncherApi/Controllers/HealthController.cs` | Anonymous health endpoint |
 | `src/LauncherApi/Controllers/UserController.cs` | Authenticated user info |
-| `src/LauncherApi/Controllers/ToolsController.cs` | Tool listing + launch audit |
+| `src/LauncherApi/Controllers/ToolsController.cs` | Tool catalog (explore-only, per-system) |
 | `src/LauncherApi/Controllers/SessionController.cs` | Server environment info |
-| `src/LauncherApi/Models/ToolInfo.cs` | Tool data model |
+| `src/LauncherApi/Services/ToolsService.cs` | Loads the tool catalog from `config/tools.json` |
+| `src/LauncherApi/Models/ToolInfo.cs` | Tool / system / catalog data models |
+| `src/LauncherApi/config/tools.json` | Tool catalog: 581 tools across 4 systems |
 
 ### Launcher App Changes (`libvirt-ui/`)
 

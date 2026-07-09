@@ -38,7 +38,7 @@
 - 4 controllers:
   - `HealthController` — `[AllowAnonymous]` health check at `/api/health`
   - `UserController` — Returns Kerberos principal and claims at `/api/user`
-  - `ToolsController` — Tool listing + launch audit at `/api/tools`
+  - `ToolsController` — Tool catalog (explore-only) at `/api/tools`, backed by `config/tools.json`
   - `SessionController` — Environment info at `/api/session`
 - Auth debug logging enabled in appsettings.json for troubleshooting
 - **Decision**: `FallbackPolicy = DefaultPolicy` — all endpoints require auth by default, explicit `[AllowAnonymous]` on health only
@@ -76,8 +76,8 @@
 - New `src/ipc/apiIPC.ts` — 6 IPC handlers using Electron's `net.request()` for native Negotiate support
   - `api:health` — unauthenticated connectivity check
   - `api:user` — authenticated user identity
-  - `api:tools` — server-side tool listing
-  - `api:launch-tool` — audit trail for tool launches
+  - `api:tools` — server-side tool catalog (explore-only)
+  - _(tool launch/run removed — tools live on separate VMs; the catalog is informational)_
   - `api:session` — server environment info
   - `api:reload-config` — hot-reload API config
 - New `config/api.yaml` — API base URL and auth method config
@@ -153,7 +153,7 @@ $ curl -sk --negotiate -u : https://api.lab.forge.local/api/user
 
 $ curl -sk --negotiate -u : https://api.lab.forge.local/api/tools
 
-{"user":"testuser@LAB.FORGE.LOCAL","tools":[...5 tools...]}
+{"user":"testuser@LAB.FORGE.LOCAL","systems":[...4 systems...],"count":581,"tools":[...581 tools...]}
 
 $ curl -sk --negotiate -u : https://api.lab.forge.local/api/session
 

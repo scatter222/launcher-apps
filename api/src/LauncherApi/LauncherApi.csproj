@@ -10,4 +10,10 @@
     <PackageReference Include="Microsoft.AspNetCore.Authentication.Negotiate" Version="8.0.0" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- The Web SDK auto-includes **/*.json as Content but does not copy it to
+         the build output. Ensure the tool catalog ships next to the binary. -->
+    <Content Update="config/tools.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

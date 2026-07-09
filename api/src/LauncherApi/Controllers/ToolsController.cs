@@ -1,5 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
-using LauncherApi.Models;
+using LauncherApi.Services;
 
 namespace LauncherApi.Controllers;
 
@@ -7,50 +7,43 @@ namespace LauncherApi.Controllers;
 [Route("api/[controller]")]
 public class ToolsController : ControllerBase
 {
+    private readonly ToolsService _tools;
+
+    public ToolsController(ToolsService tools)
+    {
+        _tools = tools;
+    }
+
     /// <summary>
-    /// Returns available tools for the authenticated user.
+    /// Returns the tool catalog so users can explore what is available across
+    /// the lab's analysis VMs. This is informational only — tools are not
+    /// launched from here; each runs on its own system (see the `system` field).
+    /// Optional query filters: <c>?system=</c> and <c>?category=</c>.
     /// </summary>
     [HttpGet]
-    public IActionResult GetTools()
+    public IActionResult GetTools([FromQuery] string? system = null, [FromQuery] string? category = null)
     {
-        // TODO: Source from database or config in future
-        var tools = new[]
-        {
-            new ToolInfo { Id = "nmap", Name = "Nmap", Category = "Reconnaissance", Available = true },
-            new ToolInfo { Id = "metasploit", Name = "Metasploit", Category = "Exploitation", Available = true },
-            new ToolInfo { Id = "wireshark", Name = "Wireshark", Category = "Digital Forensics", Available = true },
-            new ToolInfo { Id = "burpsuite", Name = "Burp Suite", Category = "Web Security", Available = true },
-            new ToolInfo { Id = "ghidra", Name = "Ghidra", Category = "Reverse Engineering", Available = true },
-        };
+        var tools = _tools.GetTools(system, category);
 
         return Ok(new
         {
             user = User.Identity?.Name,
+            systems = _tools.GetSystems(),
+            count = tools.Count,
             tools
         });
     }
 
     /// <summary>
-    /// Log a tool launch event for the authenticated user.
+    /// Returns the list of systems/VMs that host tools.
     /// </summary>
-    [HttpPost("{id}/launch")]
-    public IActionResult LaunchTool(string id)
+    [HttpGet("systems")]
+    public IActionResult GetSystems()
     {
-        var userName = User.Identity?.Name ?? "unknown";
-
-        // TODO: Persist audit log to database
-        var auditEntry = new
-        {
-            toolId = id,
-            user = userName,
-            timestamp = DateTime.UtcNow,
-            action = "launch"
-        };
-
         return Ok(new
         {
-            message = $"Tool launch '{id}' recorded for user '{userName}'",
-            audit = auditEntry
+            user = User.Identity?.Name,
+            systems = _tools.GetSystems()
         });
     }
 }

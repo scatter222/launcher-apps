@@ -14,6 +14,7 @@ builder.Services.AddAuthorization(options =>
 });
 
 builder.Services.AddSingleton<VmService>();
+builder.Services.AddSingleton<ToolsService>();
 builder.Services.AddControllers();
 
 var app = builder.Build();
