@@ -212,17 +212,47 @@ API and workstation provision **in parallel** after identity completes, since bo
 
 ---
 
+## Authorization: FreeIPA Groups
+
+Kerberos says who the caller is, not what they may do. FreeIPA runs MIT
+Kerberos and issues **no PAC**, so unlike Active Directory the ticket carries no
+group membership. The API does a second lookup: one LDAP search of the user
+entry reads `memberOf` (already expanded by FreeIPA, so nested groups are
+included), cached for five minutes, and each group becomes a role claim on the
+principal. The bind is SASL/GSSAPI as the API host, so no directory password is
+stored. If the directory is unreachable the caller gets no groups and gated
+endpoints deny.
+
+Policies map group names to actions in `appsettings.json`, so endpoints are
+guarded with one attribute and group names can change without a rebuild:
+
+```jsonc
+"Authorization": { "Policies": { "vm.manage": [ "launcher-vm-users", "launcher-admins" ] } }
+```
+
+Setup, configuration and examples: [api/README.md](../api/README.md).
+
+---
+
 ## API Endpoints
 
 | Method | Path | Auth | Purpose |
 |--------|------|------|---------|
 | `GET` | `/api/health` | Anonymous | Health check — returns 200 if API is running |
 | `GET` | `/api/user` | Negotiate | Returns authenticated user's Kerberos principal and claims |
-| `GET` | `/api/tools` | Negotiate | Lists available cybersecurity tools |
-| `POST` | `/api/tools/{id}/launch` | Negotiate | Audit log entry for tool launch |
+| `GET` | `/api/user/groups` | Negotiate | FreeIPA groups and the policies they satisfy |
+| `GET` | `/api/tools` | `tools.view` | Lists available cybersecurity tools |
+| `POST` | `/api/tools/{id}/launch` | `tools.launch` | Audit log entry for tool launch |
+| `GET` | `/api/vms/templates` | `vm.view` | Available VM templates |
+| `GET` | `/api/vms/instances` | `vm.view` | The caller's VM instances |
+| `POST` | `/api/vms/instances` | `vm.manage` | Provision a VM from a template |
+| `POST` | `/api/vms/instances/{id}/start`, `/stop`, `/restart` | `vm.manage` | Power operations |
+| `DELETE` | `/api/vms/instances/{id}` | `vm.manage` | Delete a VM and its disk |
+| `GET` | `/api/vms/instances/{id}/console` | `vm.view` | VNC console details |
 | `GET` | `/api/session` | Negotiate | Server environment information |
 
 All endpoints except `/api/health` require Kerberos authentication (enforced via `FallbackPolicy = DefaultPolicy`).
+Policy names in the Auth column are checked against the caller's FreeIPA groups.
 
 ---
 

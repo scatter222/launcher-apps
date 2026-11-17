@@ -80,9 +80,19 @@ No passwords are transmitted. The Kerberos ticket from domain login is used tran
 |--------|------|------|---------|
 | GET | `/api/health` | Anonymous | Health check |
 | GET | `/api/user` | Negotiate | Authenticated user info |
+| GET | `/api/user/groups` | Negotiate | FreeIPA groups and the policies they satisfy |
 | GET | `/api/tools` | Negotiate | Available tools list |
 | POST | `/api/tools/{id}/launch` | Negotiate | Audit tool launch |
 | GET | `/api/session` | Negotiate | Server environment info |
+
+**Authorization**
+- FreeIPA (MIT Kerberos) issues no PAC, so group membership is read from 389-DS
+  over LDAP, cached 5 minutes, and added to the principal as role claims
+- Bind: SASL/GSSAPI as the host principal, credentials from
+  `KRB5_CLIENT_KTNAME=/etc/krb5.keytab`; no directory password stored
+- Groups created in FreeIPA: `launcher-users`, `launcher-vm-users`, `launcher-admins`
+- Group-to-action mapping lives in the `Authorization:Policies` section of
+  `appsettings.json`; see `api/README.md`
 
 **Nginx Reverse Proxy**
 - Listens: 443 (TLS) with self-signed certificate
@@ -98,6 +108,9 @@ WorkingDirectory=/opt/launcher-api
 ExecStart=/opt/launcher-api/LauncherApi
 Environment=ASPNETCORE_URLS=http://0.0.0.0:5000
 Environment=KRB5_KTNAME=/etc/krb5.keytab.api
+Environment=KRB5_CLIENT_KTNAME=/etc/krb5.keytab
+Environment=KRB5CCNAME=FILE:/run/launcher-api/krb5cc
+RuntimeDirectory=launcher-api
 Restart=always
 ```
 

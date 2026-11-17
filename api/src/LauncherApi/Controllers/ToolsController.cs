@@ -1,5 +1,8 @@
-using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
+using LauncherApi.Authorization;
 using LauncherApi.Models;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 
 namespace LauncherApi.Controllers;
 
@@ -11,6 +14,7 @@ public class ToolsController : ControllerBase
     /// Returns available tools for the authenticated user.
     /// </summary>
     [HttpGet]
+    [Authorize(Policy = LauncherPolicies.ToolsView)]
     public IActionResult GetTools()
     {
         // TODO: Source from database or config in future
@@ -34,6 +38,7 @@ public class ToolsController : ControllerBase
     /// Log a tool launch event for the authenticated user.
     /// </summary>
     [HttpPost("{id}/launch")]
+    [Authorize(Policy = LauncherPolicies.ToolsLaunch)]
     public IActionResult LaunchTool(string id)
     {
         var userName = User.Identity?.Name ?? "unknown";
@@ -43,6 +48,7 @@ public class ToolsController : ControllerBase
         {
             toolId = id,
             user = userName,
+            groups = User.FindAll(ClaimTypes.Role).Select(c => c.Value),
             timestamp = DateTime.UtcNow,
             action = "launch"
         };

@@ -1,5 +1,7 @@
+using LauncherApi.Authorization;
 using LauncherApi.Models;
 using LauncherApi.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace LauncherApi.Controllers;
@@ -18,12 +20,14 @@ public class VmController : ControllerBase
     private string GetOwner() => User.Identity?.Name ?? "anonymous";
 
     [HttpGet("templates")]
+    [Authorize(Policy = LauncherPolicies.VmView)]
     public ActionResult<List<VmTemplate>> GetTemplates()
     {
         return Ok(_vmService.GetTemplates());
     }
 
     [HttpGet("instances")]
+    [Authorize(Policy = LauncherPolicies.VmView)]
     public async Task<ActionResult<List<VmInstance>>> GetInstances()
     {
         var instances = await _vmService.GetUserInstances(GetOwner());
@@ -31,6 +35,7 @@ public class VmController : ControllerBase
     }
 
     [HttpPost("instances")]
+    [Authorize(Policy = LauncherPolicies.VmManage)]
     public async Task<ActionResult<VmInstance>> CreateInstance([FromBody] CreateInstanceRequest request)
     {
         try
@@ -53,6 +58,7 @@ public class VmController : ControllerBase
     }
 
     [HttpPost("instances/{id}/start")]
+    [Authorize(Policy = LauncherPolicies.VmManage)]
     public async Task<IActionResult> StartInstance(string id)
     {
         try
@@ -67,6 +73,7 @@ public class VmController : ControllerBase
     }
 
     [HttpPost("instances/{id}/stop")]
+    [Authorize(Policy = LauncherPolicies.VmManage)]
     public async Task<IActionResult> StopInstance(string id)
     {
         try
@@ -81,6 +88,7 @@ public class VmController : ControllerBase
     }
 
     [HttpPost("instances/{id}/restart")]
+    [Authorize(Policy = LauncherPolicies.VmManage)]
     public async Task<IActionResult> RestartInstance(string id)
     {
         try
@@ -95,6 +103,7 @@ public class VmController : ControllerBase
     }
 
     [HttpDelete("instances/{id}")]
+    [Authorize(Policy = LauncherPolicies.VmManage)]
     public async Task<IActionResult> DeleteInstance(string id)
     {
         try
@@ -109,6 +118,7 @@ public class VmController : ControllerBase
     }
 
     [HttpGet("instances/{id}/console")]
+    [Authorize(Policy = LauncherPolicies.VmView)]
     public async Task<ActionResult<ConsoleInfo>> GetConsole(string id)
     {
         try
