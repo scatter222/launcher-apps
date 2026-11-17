@@ -394,6 +394,13 @@ ipa-getkeytab -s "idm.${DOMAIN}" -p "HTTP/api.${DOMAIN}" -k /etc/krb5.keytab.api
 chmod 600 /etc/krb5.keytab.api
 klist -k /etc/krb5.keytab.api
 
+# Trust the FreeIPA CA so the API can open an LDAPS connection to the directory
+# for group lookups.
+if [ -f /etc/ipa/ca.crt ]; then
+  cp /etc/ipa/ca.crt /etc/pki/ca-trust/source/anchors/ipa-ca.crt
+  update-ca-trust extract
+fi
+
 echo "[11/14] API keytab generated and verified."
 
 # =================================================
@@ -449,7 +456,17 @@ WorkingDirectory=/opt/launcher-api
 ExecStart=/opt/launcher-api/LauncherApi
 Environment=ASPNETCORE_URLS=http://0.0.0.0:5000
 Environment=ASPNETCORE_ENVIRONMENT=Production
+# Keytab the Negotiate handler uses to decrypt inbound service tickets.
 Environment=KRB5_KTNAME=/etc/krb5.keytab.api
+# Host credentials for the outbound LDAP bind that reads FreeIPA groups. MIT
+# Kerberos gets a TGT from the client keytab on demand, so there is no password
+# and no cron job keeping a ticket alive.
+Environment=KRB5_CLIENT_KTNAME=/etc/krb5.keytab
+Environment=KRB5CCNAME=FILE:/run/launcher-api/krb5cc
+RuntimeDirectory=launcher-api
+# Directory location; overrides the FreeIpa section of appsettings.json.
+Environment=FreeIpa__LdapUri=ldaps://idm.${DOMAIN}:636
+Environment=FreeIpa__Realm=${REALM}
 Restart=always
 RestartSec=5
 SyslogIdentifier=launcher-api

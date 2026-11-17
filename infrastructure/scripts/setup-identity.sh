@@ -2,6 +2,10 @@
 set -euo pipefail
 
 # Identity Server Setup: FreeIPA + Keycloak
+#
+# LEGACY: from the original 3-VM layout. Terraform no longer runs this script
+# (see provisioning.tf) -- FreeIPA now runs in a KVM guest provisioned by
+# setup-freeipa-vm.sh. Kept for reference.
 # Usage: setup-identity.sh <credentials-file>
 # Credentials file contains: DOMAIN, REALM, IPA_ADMIN_PASSWORD, IPA_DS_PASSWORD, ADMIN_USER
 

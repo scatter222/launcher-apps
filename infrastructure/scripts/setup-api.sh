@@ -2,6 +2,10 @@
 set -euo pipefail
 
 # API Server Setup: Domain join + .NET Core API + Nginx
+#
+# LEGACY: from the original 3-VM layout. Terraform no longer runs this script
+# (see provisioning.tf) -- the API is now deployed by setup-server.sh. Kept for
+# reference; change setup-server.sh if you want a change to take effect.
 # Usage: setup-api.sh <credentials-file>
 # Credentials file contains: DOMAIN, REALM, IPA_ADMIN_PASSWORD, ADMIN_USER, IPA_SERVER_IP
 # Expects launcher-api-src.tar.gz in the admin user's home directory.
