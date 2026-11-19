@@ -189,8 +189,12 @@ sudo KRB5CCNAME=FILE:/tmp/t ldapsearch -Y GSSAPI -H ldaps://idm.lab.forge.local 
 
 If that returns nothing, so will the API. Common causes are a missing ticket
 for the host principal, the IPA CA not being trusted, or port 636 blocked.
-A 401 rather than a 403 is authentication, not authorization: see the Kerberos
-notes in `../docs/ARCHITECTURE.md`.
+A 401 rather than a 403 is authentication, not authorization.
+
+For either case there is a step-by-step runbook of commands and the output to
+expect at each layer, from the client's ticket through to the `memberOf` read:
+[docs/KERBEROS-TROUBLESHOOTING.md](../docs/KERBEROS-TROUBLESHOOTING.md). It is
+written to stand alone, so it can be copied to a host with no network access.
 
 ## Building a deployable artifact
 
