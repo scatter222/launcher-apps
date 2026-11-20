@@ -28,10 +28,10 @@ anything.
 | `Server not found in Kerberos database` | client to KDC | The client asked for a service principal that does not exist. Read the principal name in the message. |
 | `No Kerberos credentials available` | client | The user has no ticket. Run `kinit`. |
 | `Clock skew too great` | time | More than five minutes of drift between client, KDC or server. |
-| `Decrypt integrity check failed`, or a bare `GenericFailure` | server keytab | Right principal, wrong or stale key. |
+| `An exception occurred while processing the authentication request`, `GenericFailure`, `Decrypt integrity check failed`, `Key table entry not found` | server keytab | The ticket arrived and the server cannot decrypt it. Read the GSSAPI minor code. See step 9. |
 | `KDC has no support for encryption type` | enctype | The keytab's encryption types do not overlap with the KDC's. |
 | 401 with no ticket ever requested | client config | The client never attempted Negotiate. See step 8. |
-| `ldap_sasl_interactive_bind_s: Local error (-2)` | LDAP bind | No usable credentials cache for the GSSAPI bind. See step 10. |
+| `ldap_sasl_interactive_bind_s: Local error (-2)` | LDAP bind | No usable credentials cache for the GSSAPI bind. See step 11. |
 | `Insufficient access` from LDAP | directory ACI | The bind worked but the account may not read that attribute. |
 
 If the principal in a "not found in Kerberos database" message contains an **IP
@@ -154,7 +154,7 @@ Expect:
 but no keytab was ever retrieved, so the API cannot decrypt anything.
 
 `ipa: ERROR: HTTP/api.example.com: service not found` means it was never
-created. Go to step 11.
+created. Go to step 12.
 
 **In the web UI:** Identity, then Services. One row per principal, with a
 Principal name column reading `HTTP/api.example.com@EXAMPLE.COM`. Open the row
@@ -261,7 +261,166 @@ Server-side, turn the handler's own logging up to see the decision:
 journalctl -u launcher-api -f
 ```
 
-## 9. TLS is not the thing failing
+## 9. The API logs a generic authentication error
+
+This is the next failure after the ticket starts arriving. The client gets a
+service ticket, the server receives it, and the server cannot decrypt it. The
+handler logs an outer message like "An exception occurred while processing the
+authentication request" which says nothing on its own. **The answer is the
+GSSAPI minor code underneath it, in parentheses.**
+
+Get the full exception:
+
+```jsonc
+"Logging": { "LogLevel": { "Microsoft.AspNetCore.Authentication": "Debug" } }
+```
+
+Then add a Kerberos trace to the service, which prints which keytab entry it
+looked for and why it rejected the ticket:
+
+```bash
+sudo mkdir -p /etc/systemd/system/launcher-api.service.d
+sudo tee /etc/systemd/system/launcher-api.service.d/trace.conf <<'EOF'
+[Service]
+Environment=KRB5_TRACE=/dev/stderr
+EOF
+sudo systemctl daemon-reload && sudo systemctl restart launcher-api
+journalctl -u launcher-api -f
+```
+
+Minor codes and what each means:
+
+| Minor code | Cause |
+| --- | --- |
+| `Key table entry not found`, `Request ticket server HTTP/... kvno N not found in keytab` | The keytab has no entry for that principal at that key version |
+| `Decrypt integrity check failed` | Right principal, wrong key. The keytab is stale. |
+| `Keytab FILE:/... is nonexistent or empty` | Wrong path, or the service account cannot read it |
+| `No key table entry found matching HTTP/...` | Principal name mismatch, including letter case |
+| `Encryption type ... not permitted`, `KDC has no support for encryption type` | The ticket's encryption type is not in the keytab |
+| `Clock skew too great` | More than five minutes of drift. See step 2. |
+
+Remove the trace drop-in once you are done.
+
+### The decisive test
+
+`kvno -k` fetches a real service ticket and then decrypts it with the keytab,
+which is exactly what the server does. It settles whether the fault is the
+keytab or the application in one command:
+
+```bash
+sudo -i
+kinit admin                                              # any user will do
+kvno -k /etc/krb5.keytab.api HTTP/api.example.com
+```
+
+Success looks like:
+
+```
+HTTP/api.example.com@EXAMPLE.COM: kvno = 1, keytab entry valid
+```
+
+- **It succeeds.** The keytab is fine and can decrypt tickets for that service.
+  The fault is in the application: the path it reads, the user it runs as, or
+  the environment it was given. Go to the two checks below.
+- **It fails.** The keytab is the problem. Go to "Replacing a stale keytab".
+
+A second, narrower test asks whether the keytab's key still matches the KDC:
+
+```bash
+sudo kinit -k -t /etc/krb5.keytab.api HTTP/api.example.com && sudo klist
+```
+
+`Preauthentication failed` or `Password incorrect while getting initial
+credentials` means the key in the file is no longer the key the KDC holds.
+
+### If the keytab is good but the API still fails
+
+Check which account the service runs as, and that it can read the file:
+
+```bash
+systemctl show -p User -p Group launcher-api
+sudo -u launcher-api klist -k /etc/krb5.keytab.api
+```
+
+A keytab at mode `600` owned by root is unreadable by any other account, and
+GSSAPI reports that as the keytab being nonexistent or empty. Either run the
+service as root or give the account ownership:
+
+```bash
+sudo chown launcher-api /etc/krb5.keytab.api
+sudo chmod 600 /etc/krb5.keytab.api
+```
+
+Then confirm the running process actually has the variable, because a unit file
+edited without a reload does not:
+
+```bash
+sudo tr '\0' '\n' < /proc/$(pgrep -f LauncherApi | head -1)/environ | grep KRB5
+```
+
+### Encryption types
+
+Compare what the ticket uses against what the keytab holds. On the client,
+after a request:
+
+```bash
+klist -e
+```
+
+```
+Etype (skey, tkt): aes256-cts-hmac-sha1-96, aes256-cts-hmac-sha1-96
+```
+
+On the API host:
+
+```bash
+sudo klist -ke /etc/krb5.keytab.api
+```
+
+The ticket's type must appear in the keytab. A keytab generated with a narrower
+set of types than the KDC issues produces a key-not-found failure even though
+the principal and version look right.
+
+### Kerberos or NTLM?
+
+.NET on Linux accepts Kerberos but not NTLM, and an NTLM token produces a
+generic failure. Look at the token the client sent. Log it in nginx:
+
+```
+log_format spnego '$remote_addr "$request" auth="$http_authorization"';
+```
+
+A base64 token starting `YII` is Kerberos. One starting `TlRMTVNTUA`, which
+decodes to `NTLMSSP`, is NTLM, and that will never work here. Clients fall back
+to NTLM when they cannot get a service ticket, so fix the ticket path rather
+than the server.
+
+### Replacing a stale keytab
+
+A keytab goes stale when the host is re-enrolled, or when `ipa-getkeytab` is
+run again anywhere else, because **by default it generates a new key and
+invalidates every existing copy**. Retrieve the current key instead of making a
+new one:
+
+```bash
+kinit admin
+ipa-getkeytab -r -p HTTP/api.example.com -k /etc/krb5.keytab.api
+sudo klist -ke /etc/krb5.keytab.api
+kvno HTTP/api.example.com          # version should now match the file
+```
+
+`-r` needs the retrieve-keytab permission, which FreeIPA grants with:
+
+```bash
+ipa service-allow-retrieve-keytab HTTP/api.example.com --hosts=api.example.com
+```
+
+Without `-r` the command mints a new key, which is fine when only one keytab
+exists, and breaks every other copy when more than one does.
+
+---
+
+## 10. TLS is not the thing failing
 
 An IP address in the URL also fails certificate validation, which can look like
 an auth problem.
@@ -276,7 +435,7 @@ Expect the subject to carry the name you dialled. The examples here use
 
 ---
 
-## 10. The group lookup over LDAP
+## 11. The group lookup over LDAP
 
 Authentication and group lookup fail independently. Once step 8 passes, test
 the directory read separately. This is the part the API does to decide what a
@@ -369,7 +528,7 @@ dpkg -l | grep libldap             # Debian, Ubuntu
 
 ---
 
-## 11. Is the host joined, and does it need to be?
+## 12. Is the host joined, and does it need to be?
 
 ```bash
 ls -l /etc/ipa/default.conf          # exists only after enrolment
@@ -464,6 +623,7 @@ echo "== dns =="         ; host "$API"; host "$(dig +short "$API" | head -1)"
 echo "== krb5.conf =="   ; grep -E "default_realm|rdns" /etc/krb5.conf
 echo "== keytab =="      ; sudo klist -k /etc/krb5.keytab.api
 echo "== kdc kvno =="    ; kvno "HTTP/$API" 2>&1 | tail -1
+echo "== can decrypt ==" ; kvno -k /etc/krb5.keytab.api "HTTP/$API" 2>&1 | tail -1
 echo "== service env ==" ; systemctl cat launcher-api 2>/dev/null | grep -i krb5
 echo "== ldap bind =="   ; sudo kinit -k -t /etc/krb5.keytab.api "HTTP/$API" \
                              && ldapwhoami -Y GSSAPI -H "ldaps://$IPA" 2>&1 | tail -2
