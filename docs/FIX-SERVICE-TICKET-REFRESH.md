@@ -112,6 +112,63 @@ runs. No `kinit`, no cron job, nobody logging in.
 
 ---
 
+## If it says "no Kerberos credentials available" and names the new cache
+
+Good sign: the service is reading the cache you gave it. The cache is simply
+empty, because nothing has put a ticket in it yet.
+
+A plain `kinit` does **not** fill it. `kinit` writes to *your* default cache,
+so `klist` will look perfectly healthy while the service still has nothing.
+They are two separate files. Always name the cache explicitly:
+
+```bash
+# fill the service's cache from the keytab
+sudo kinit -k -t /etc/krb5.keytab.api -c FILE:/run/launcher-api/krb5cc \
+  HTTP/api.example.com
+
+# read that cache, not yours
+sudo klist -c FILE:/run/launcher-api/krb5cc
+```
+
+Now exercise a group lookup. If it works, everything is correct except that
+nothing seeds the cache at startup, which is the next block.
+
+### Seed the cache on every start
+
+`ExecStartPre` runs after systemd has created `RuntimeDirectory` and before the
+app starts, so the cache is always populated by the time the first request
+arrives:
+
+```bash
+sudo tee /etc/systemd/system/launcher-api.service.d/kerberos.conf <<'EOF'
+[Service]
+Environment=KRB5CCNAME=FILE:/run/launcher-api/krb5cc
+Environment=KRB5_CLIENT_KTNAME=/etc/krb5.keytab.api
+RuntimeDirectory=launcher-api
+ExecStartPre=/usr/bin/kinit -k -t /etc/krb5.keytab.api -c FILE:/run/launcher-api/krb5cc HTTP/api.example.com
+EOF
+
+sudo systemctl daemon-reload
+sudo systemctl restart launcher-api
+sudo klist -c FILE:/run/launcher-api/krb5cc
+```
+
+That is the deterministic version: `ExecStartPre` guarantees credentials exist
+from the first second, and `KRB5_CLIENT_KTNAME` refreshes them from the same
+keytab as they age, because the principal in the cache now matches the keytab.
+
+If the service fails to start after this, `ExecStartPre` is the thing that
+failed, and the reason is in the log:
+
+```bash
+journalctl -u launcher-api -n 30
+```
+
+A preauthentication failure there means the keytab key no longer matches the
+KDC. See the next section.
+
+---
+
 ## If it is still expired after the restart
 
 Then re-acquisition is being attempted and failing, and the stale ticket is all
