@@ -662,6 +662,10 @@ renewal daemon, nothing to keep alive.
 
 #### A client keytab alone is not enough: give the service its own cache
 
+Step-by-step version of this fix, with the checks and the rollback:
+[FIX-SERVICE-TICKET-REFRESH.md](FIX-SERVICE-TICKET-REFRESH.md).
+
+
 `KRB5_CLIENT_KTNAME` is the mechanism that acquires credentials.
 `KRB5CCNAME` only says where the cache lives, and leaving it out is how this
 breaks.
