@@ -15,6 +15,11 @@ it.
 Substitute `api.example.com`, `EXAMPLE.COM` and `launcher-api` for your own
 names throughout.
 
+> **If `kinit -k -t` fails with "Preauthentication failed", stop and go to
+> [the keytab is stale](#the-keytab-is-stale). That is a different root cause,
+> and it also explains generic GSSAPI failures on inbound requests, because the
+> same keytab serves both directions.**
+
 ---
 
 ## Step 1: find the cache you are using now
@@ -165,34 +170,99 @@ journalctl -u launcher-api -n 30
 ```
 
 A preauthentication failure there means the keytab key no longer matches the
-KDC. See the next section.
+KDC. Go to [the keytab is stale](#the-keytab-is-stale).
 
 ---
 
-## If it is still expired after the restart
+## The keytab is stale
 
-Then re-acquisition is being attempted and failing, and the stale ticket is all
-the service has. The keytab's key no longer matches the KDC. One command
-settles it:
-
-```bash
-sudo kinit -k -t /etc/krb5.keytab.api HTTP/api.example.com
+```
+kinit: Preauthentication failed while getting initial credentials
+kinit: Password incorrect while getting initial credentials
 ```
 
-- It succeeds, so the keytab is good and the fault is elsewhere. Check the cache
-  file's ownership against the service's user, per item 2 above.
-- `Preauthentication failed` or `Password incorrect while getting initial
-  credentials`, so the key in the file is not the key the KDC holds. Retrieve
-  the current one:
+Either message from `kinit -k -t` means the key in the keytab file is no longer
+the key the KDC holds for that principal. Nothing in the application can work
+around it. The keytab must be replaced.
+
+It is not caused by the account you are logged in as. `kinit -k -t` only needs
+to read the file and match its key against the KDC.
+
+### Why a keytab goes stale
+
+- The host was re-enrolled with `ipa-client-install`, which rotates keys
+- `ipa-getkeytab` was run again, anywhere, without `-r`, which mints a new key
+  and invalidates every existing copy
+- The service was disabled and re-enabled, or an admin reset the key
+
+FreeIPA does not rotate these on a schedule, so one of the above happened.
+
+### Replace it
+
+You need a **domain admin ticket** for this. A local account has none, and
+`kinit` with no principal reuses whatever a leftover cache held, so name the
+principal. Work as root throughout, because `sudo` will not carry your own
+ticket cache across to root.
 
 ```bash
-kinit admin
-ipa-getkeytab -r -p HTTP/api.example.com -k /etc/krb5.keytab.api
+sudo -i
+kinit admin                     # the domain admin password
+klist                           # must show admin@EXAMPLE.COM
+```
+
+Then retrieve the existing key, which leaves other copies working:
+
+```bash
+ipa-getkeytab -s ipa.example.com -r \
+  -p HTTP/api.example.com -k /etc/krb5.keytab.api
+```
+
+If that is refused for lack of permission, drop `-r` and generate a new key.
+That is safe when this host holds the only copy, and it updates inbound and
+outbound at the same time because both read this one file:
+
+```bash
+ipa-getkeytab -s ipa.example.com \
+  -p HTTP/api.example.com -k /etc/krb5.keytab.api
+chmod 600 /etc/krb5.keytab.api
+```
+
+### Verify before restarting anything
+
+```bash
+klist -kte /etc/krb5.keytab.api         # principal and key version in the file
+kvno HTTP/api.example.com               # key version the KDC holds: must match
+```
+
+Then prove the new key works, using a scratch cache so the admin ticket is left
+alone:
+
+```bash
+kinit -k -t /etc/krb5.keytab.api -c FILE:/tmp/ktest HTTP/api.example.com
+klist -c FILE:/tmp/ktest
+kdestroy -c FILE:/tmp/ktest
+```
+
+No error and a ticket for `HTTP/api.example.com@EXAMPLE.COM` means the keytab
+is good.
+
+### Restart and check both directions
+
+```bash
+exit                            # leave the root shell
 sudo systemctl restart launcher-api
+sudo klist -c FILE:/run/launcher-api/krb5cc
 ```
 
-**Use `-r`.** Without it, `ipa-getkeytab` generates a *new* key and invalidates
-every other copy of that keytab, which breaks inbound authentication as well.
+Outbound is working when that cache shows the service's own principal with a
+future expiry. Inbound is working when a request from a workstation succeeds:
+
+```bash
+kinit jsmith
+curl -k --negotiate -u : https://api.example.com/api/user/groups
+```
+
+Both should come right together, since the stale key was breaking both.
 
 ---
 
