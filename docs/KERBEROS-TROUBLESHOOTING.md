@@ -593,8 +593,16 @@ the wrong place.
 
 A keytab holds the long-term symmetric keys for a principal. There is no
 validity period on the file or on the keys in it, and nothing renews them
-because there is nothing to renew. `klist -kt` prints a Timestamp column, but
-that is when the entry was written into the file, not an expiry.
+because there is nothing to renew. `klist -k` prints KVNO and Principal, and
+with `-t` a Timestamp, which is when the entry was written into the file.
+
+**A keytab listing has no Expires column at all.** If you are reading one, you
+are looking at a credentials cache rather than the keytab:
+
+```bash
+sudo klist -kt /etc/krb5.keytab.api   # keytab: KVNO, Timestamp, Principal
+sudo klist                            # cache:  Valid starting, Expires, Service principal
+```
 
 A keytab stops working only when the key is **changed in the KDC**, which makes
 the copy on disk wrong rather than out of date. Things that change it:
@@ -651,6 +659,51 @@ RuntimeDirectory=launcher-api
 With a client keytab configured, MIT Kerberos acquires a ticket when the cache
 is empty or expired and re-acquires it later on its own. No cron job, no
 renewal daemon, nothing to keep alive.
+
+#### A client keytab alone is not enough: give the service its own cache
+
+`KRB5_CLIENT_KTNAME` is the mechanism that acquires credentials.
+`KRB5CCNAME` only says where the cache lives, and leaving it out is how this
+breaks.
+
+With no cache path of its own, the service falls back to `default_ccache_name`
+from `/etc/krb5.conf`, which resolves per user. A service running as root then
+shares root's cache with every `sudo kinit` an administrator has ever run. The
+client keytab fills a cache that is empty and refreshes credentials for the
+principal it holds, but it will **not** discard credentials belonging to a
+different principal. So a leftover expired `admin@EXAMPLE.COM` ticket in root's
+cache stops the service acquiring its own, and every lookup fails with a ticket
+expired error even though the keytab is perfectly good.
+
+The symptom is that lookups work while an administrator is logged in and break
+roughly a day later, which reads as though the service needs a human to keep
+refreshing a ticket.
+
+Confirm it without restarting anything:
+
+```bash
+sudo klist          # shows admin@EXAMPLE.COM, expired?
+sudo kdestroy       # then exercise the API again
+```
+
+Working immediately after `kdestroy` proves the stale cache was the blocker.
+Fix it permanently with a drop-in, so the service has a private cache that is
+cleared on every restart:
+
+```bash
+sudo mkdir -p /etc/systemd/system/launcher-api.service.d
+sudo tee /etc/systemd/system/launcher-api.service.d/kerberos.conf <<'EOF'
+[Service]
+Environment=KRB5_CLIENT_KTNAME=/etc/krb5.keytab.api
+Environment=KRB5CCNAME=FILE:/run/launcher-api/krb5cc
+RuntimeDirectory=launcher-api
+EOF
+sudo systemctl daemon-reload && sudo systemctl restart launcher-api
+```
+
+The same mix-up has a security side. Borrowing an administrator's cache means
+the service was binding to the directory as a full directory admin, which is
+far more access than reading `memberOf` needs.
 
 What does **not** renew is a one-off `kinit -k` at startup. That ticket dies
 when its lifetime runs out and nothing replaces it, so group lookups start
