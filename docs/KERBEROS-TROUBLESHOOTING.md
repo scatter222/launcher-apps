@@ -18,6 +18,10 @@ access. Substitute throughout:
 
 ---
 
+> Building this from automation rather than fixing a live host? The ordered
+> commands, with the idempotency guards, are in
+> [AUTOMATED-PROVISIONING.md](AUTOMATED-PROVISIONING.md).
+
 ## Start here: which failure do you have?
 
 The message text tells you which layer is broken. Match it before changing

@@ -196,6 +196,10 @@ expect at each layer, from the client's ticket through to the `memberOf` read:
 [docs/KERBEROS-TROUBLESHOOTING.md](../docs/KERBEROS-TROUBLESHOOTING.md). It is
 written to stand alone, so it can be copied to a host with no network access.
 
+To build a host from automation rather than diagnose one, the ordered commands
+and the guards that make them safe to re-run are in
+[docs/AUTOMATED-PROVISIONING.md](../docs/AUTOMATED-PROVISIONING.md).
+
 ## Building a deployable artifact
 
 The `Dockerfile` in this directory is **build-only**. Its final stage is
