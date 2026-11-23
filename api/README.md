@@ -198,7 +198,10 @@ written to stand alone, so it can be copied to a host with no network access.
 
 To build a host from automation rather than diagnose one, the ordered commands
 and the guards that make them safe to re-run are in
-[docs/AUTOMATED-PROVISIONING.md](../docs/AUTOMATED-PROVISIONING.md).
+[docs/AUTOMATED-PROVISIONING.md](../docs/AUTOMATED-PROVISIONING.md). For the
+client half, how an Electron app sends the ticket and what to check when it
+does not, see
+[docs/ELECTRON-KERBEROS-CLIENT.md](../docs/ELECTRON-KERBEROS-CLIENT.md).
 
 ## Building a deployable artifact
 

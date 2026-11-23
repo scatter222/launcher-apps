@@ -329,6 +329,7 @@ All VMs use FreeIPA as their primary DNS with Azure DNS (168.63.129.16) as a for
 
 For a step-by-step runbook of diagnostic commands and the output to expect at
 each layer, see [Kerberos and FreeIPA Troubleshooting](KERBEROS-TROUBLESHOOTING.md).
+For the client side, see [Electron client: sending the Kerberos ticket](ELECTRON-KERBEROS-CLIENT.md).
 The notes below cover the faults seen most often in this environment.
 
 ### "GenericFailure" on Negotiate Auth
