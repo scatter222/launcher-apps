@@ -225,6 +225,85 @@ If `curl` fails, the problem is not Electron. Go to
 
 If `curl` works and Electron does not, it is one of the next three.
 
+### If curl works: run the probe
+
+Curl succeeding while `klist` shows no `HTTP/...` service ticket means Chromium
+never attempted Negotiate. This probe separates the two remaining causes in one
+run, and works on any Electron version.
+
+Add it temporarily to the main process entry point, **below** the
+`appendSwitch` calls from section 1:
+
+```ts
+// --- temporary Kerberos probe, remove when done ---
+import { app, net } from 'electron'
+
+const PROBE_URL = 'https://api.example.com:9444/api/user'
+
+app.whenReady().then(async () => {
+  console.log('[probe] electron:', process.versions.electron)
+  console.log('[probe] allowlist:',
+    app.commandLine.getSwitchValue('auth-server-allowlist') || '(empty)')
+  console.log('[probe] whitelist:',
+    app.commandLine.getSwitchValue('auth-server-whitelist') || '(empty)')
+
+  if (typeof net.fetch === 'function') {
+    try {
+      const response = await net.fetch(PROBE_URL)
+      console.log('[probe] net.fetch status:', response.status)
+      console.log('[probe] body:', (await response.text()).slice(0, 200))
+    } catch (error) {
+      console.error('[probe] net.fetch failed:', error)
+    }
+  } else {
+    console.log('[probe] net.fetch unavailable on this Electron, using net.request')
+    const request = net.request(PROBE_URL)
+    request.on('response', (response) => {
+      console.log('[probe] net.request status:', response.statusCode)
+      response.on('data', () => {})
+      response.on('end', () => {})
+    })
+    request.on('error', (error) => console.error('[probe] net.request failed:', error))
+    request.end()
+  }
+})
+// --- end probe ---
+```
+
+Run it with the ticket cache visible before and after:
+
+```bash
+klist
+ELECTRON_ENABLE_LOGGING=1 KRB5_TRACE=/dev/stderr npm start 2>&1 | tee /tmp/probe.log
+klist
+```
+
+`KRB5_TRACE` prints the service principal Chromium asks the KDC for. Silence
+there means no attempt was made at all.
+
+### Reading the probe
+
+| Probe says | `klist` afterwards | Meaning |
+| --- | --- | --- |
+| status 200 | `HTTP/...` ticket present | Switches and Chromium are fine. Your existing request path is at fault, which means a Node HTTP client in it. |
+| status 401 | `HTTP/...` ticket present | The ticket was sent and the server rejected it. Server-side keytab; see the troubleshooting runbook. |
+| status 401 | no `HTTP/...` ticket | Chromium did not attempt. The allowlist is empty or was set too late, or the URL host is wrong. |
+| `allowlist: (empty)` | any | The switches never reached Chromium. They are not in the main entry point, or they run after `whenReady`. |
+| `net.fetch failed: ...ERR_CERT...` | any | Certificate trust, section 3 above. Not an auth problem. |
+| `net.fetch unavailable` | any | Electron older than 25. Use `net.request` in your real code too. |
+
+Alongside the probe, the other ten-second check:
+
+```bash
+grep -rn "axios\|node-fetch\|from 'https'\|require('https')" src/
+```
+
+Any hit in the request path explains everything on its own. Node's HTTP client
+cannot do Kerberos, so those calls will never authenticate however the switches
+are configured.
+
+Remove the probe once it has told you what you need.
+
 **2. Are you using a Node HTTP client?** Search the app for `axios`,
 `node-fetch`, `require('https')`. Any of those in the request path means no
 Kerberos, ever. This is the most common cause.
