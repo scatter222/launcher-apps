@@ -103,21 +103,30 @@ final check is a real ticket, because DNS and LDAP come up before the KDC is
 ready.
 
 ```bash
+probe_cc=$(mktemp)          # scratch credentials cache, created by kinit below
+
 ready=0
 for i in $(seq 1 90); do
   if host "$IPA_FQDN" >/dev/null 2>&1 &&
      ldapsearch -x -H "ldap://${IPA_FQDN}" -b "" -s base namingContexts \
        2>/dev/null | grep -q "dc=" &&
-     kinit -k -t /root/automation.keytab -c FILE:/tmp/.ready svc-automation >/dev/null 2>&1
+     kinit -k -t /root/automation.keytab -c "FILE:$probe_cc" svc-automation >/dev/null 2>&1
   then
-    kdestroy -c FILE:/tmp/.ready
+    kdestroy -c "FILE:$probe_cc"
     ready=1
     break
   fi
   sleep 20
 done
+rm -f "$probe_cc"
 [ "$ready" = 1 ] || { echo "FreeIPA not ready after 30 minutes"; exit 1; }
 ```
+
+`-c FILE:...` tells `kinit` where to write the credentials cache, and `kinit`
+creates that file. It is used throughout this document to put test credentials
+in a **scratch cache**, so a probe never overwrites the real one that a user or
+the service is relying on. `kdestroy -c` on the same path removes it. Since
+these run as root, the path comes from `mktemp` rather than being fixed.
 
 The last check needs some credential, and a keytab for an automation principal
 is the one to use here, because it keeps passwords off the host. Creating that
@@ -300,13 +309,18 @@ This is the guard that makes re-runs safe. Fetching unconditionally rotates the
 key and breaks the running service.
 
 ```bash
+# Scratch cache for the test, so the service's own cache is left alone.
+# kinit creates this file; nothing has to exist beforehand.
+test_cc=$(mktemp)
+
 need_keytab=1
 if [ -f /etc/krb5.keytab.api ] &&
-   kinit -k -t /etc/krb5.keytab.api -c FILE:/tmp/.ktest "HTTP/${API_FQDN}" 2>/dev/null
+   kinit -k -t /etc/krb5.keytab.api -c "FILE:$test_cc" "HTTP/${API_FQDN}" 2>/dev/null
 then
-  kdestroy -c FILE:/tmp/.ktest
+  kdestroy -c "FILE:$test_cc"
   need_keytab=0
 fi
+rm -f "$test_cc"
 
 if [ "$need_keytab" = 1 ]; then
   # -r retrieves the existing key, so other copies keep working. It needs the
@@ -362,9 +376,11 @@ Assert on these so a bad provision fails loudly instead of quietly serving 403s.
 ```bash
 set -e
 
-# the keytab's key matches the KDC
-kinit -k -t /etc/krb5.keytab.api -c FILE:/tmp/.v "HTTP/${API_FQDN}"
-kdestroy -c FILE:/tmp/.v
+# the keytab's key matches the KDC, tested in a scratch cache kinit creates
+verify_cc=$(mktemp)
+kinit -k -t /etc/krb5.keytab.api -c "FILE:$verify_cc" "HTTP/${API_FQDN}"
+kdestroy -c "FILE:$verify_cc"
+rm -f "$verify_cc"
 
 # the service acquired its own credentials
 test -s /run/launcher-api/krb5cc

@@ -238,10 +238,15 @@ Then prove the new key works, using a scratch cache so the admin ticket is left
 alone:
 
 ```bash
-kinit -k -t /etc/krb5.keytab.api -c FILE:/tmp/ktest HTTP/api.example.com
-klist -c FILE:/tmp/ktest
-kdestroy -c FILE:/tmp/ktest
+ktest=$(mktemp)        # -c below tells kinit to write its cache here
+kinit -k -t /etc/krb5.keytab.api -c "FILE:$ktest" HTTP/api.example.com
+klist -c "FILE:$ktest"
+kdestroy -c "FILE:$ktest"; rm -f "$ktest"
 ```
+
+`-c` is what makes this safe to run on a live host: `kinit` writes to that
+scratch file instead of replacing the cache the admin or the service is using.
+Nothing creates it in advance, `kinit` does.
 
 No error and a ticket for `HTTP/api.example.com@EXAMPLE.COM` means the keytab
 is good.
