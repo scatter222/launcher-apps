@@ -437,3 +437,23 @@ Diagnostics for when one of these steps has not taken:
 [KERBEROS-TROUBLESHOOTING.md](KERBEROS-TROUBLESHOOTING.md). The specific fix for
 a service whose ticket is never replaced:
 [FIX-SERVICE-TICKET-REFRESH.md](FIX-SERVICE-TICKET-REFRESH.md).
+
+---
+
+## Quick version: host already joined, no service keytab yet
+
+You ran the client join, so `/etc/krb5.keytab` exists but
+`/etc/krb5.keytab.api` does not. Enrolment does not create it. Three commands:
+
+```bash
+sudo kinit -k
+sudo ipa-getkeytab -p HTTP/$(hostname -f) -k /etc/krb5.keytab.api
+sudo systemctl restart launcher-api
+```
+
+If `ipa-getkeytab` reports the service is not found, create it first from a host
+with an admin ticket:
+
+```bash
+kinit admin && ipa service-add HTTP/$(hostname -f)
+```
