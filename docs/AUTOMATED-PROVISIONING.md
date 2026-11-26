@@ -255,6 +255,31 @@ the other reason to use a single-use one here.
 Enrolment is what writes `rdns = false` and the realm configuration, so if you
 skip it you must write `/etc/krb5.conf` yourself.
 
+### Two keytabs, two steps
+
+Enrolment does not produce the keytab your service uses. These are different
+files made by different commands, and conflating them is the usual reason a
+freshly joined host still cannot authenticate.
+
+| File | Principal | Created by |
+| --- | --- | --- |
+| `/etc/krb5.keytab` | `host/${API_FQDN}@${REALM}` | `ipa-client-install`, in 4c |
+| `/etc/krb5.keytab.api` | `HTTP/${API_FQDN}@${REALM}` | `ipa-getkeytab`, in 4e |
+
+The unit's `KRB5_KTNAME` points at the **service** keytab, so enrolling alone
+never makes the API work. The host keytab's job here is to let this host
+authenticate as itself in 4d so it can fetch the service keytab in 4e without
+an admin password.
+
+Both are mode 600, so check them as root. `ls` or `klist -k` as an ordinary
+user gives a permission error that reads like a missing file.
+
+```bash
+ls -l /etc/ipa/default.conf          # proof the join completed
+sudo klist -k /etc/krb5.keytab       # host principal, from enrolment
+sudo klist -k /etc/krb5.keytab.api   # HTTP principal, from ipa-getkeytab
+```
+
 ### 4d. Authenticate as the host itself
 
 Enrolment left a host keytab, so this host can act for itself. `kinit -k` with
