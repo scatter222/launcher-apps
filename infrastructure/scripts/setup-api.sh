@@ -2,6 +2,10 @@
 set -euo pipefail
 
 # API Server Setup: Domain join + .NET Core API + Nginx
+#
+# LEGACY: from the original 3-VM layout. Terraform no longer runs this script
+# (see provisioning.tf) -- the API is now deployed by setup-server.sh. Kept for
+# reference; change setup-server.sh if you want a change to take effect.
 # Usage: setup-api.sh <credentials-file>
 # Credentials file contains: DOMAIN, REALM, IPA_ADMIN_PASSWORD, ADMIN_USER, IPA_SERVER_IP
 # Expects launcher-api-src.tar.gz in the admin user's home directory.
@@ -68,6 +72,7 @@ dnf clean all
 dnf install -y \
   ipa-client \
   krb5-workstation \
+  openldap-clients \
   nginx \
   bind-utils \
   curl \
@@ -132,6 +137,13 @@ klist -k /etc/krb5.keytab.api
 
 kdestroy
 
+# Trust the FreeIPA CA so the API can open an LDAPS connection to the directory
+# for group lookups.
+if [ -f /etc/ipa/ca.crt ]; then
+  cp /etc/ipa/ca.crt /etc/pki/ca-trust/source/anchors/ipa-ca.crt
+  update-ca-trust extract
+fi
+
 echo "[4/9] Keytab generated and verified."
 
 # -------------------------------------------------
@@ -181,7 +193,15 @@ WorkingDirectory=/opt/launcher-api
 ExecStart=/opt/launcher-api/LauncherApi
 Environment=ASPNETCORE_URLS=http://0.0.0.0:5000
 Environment=ASPNETCORE_ENVIRONMENT=Production
+# Keytab the Negotiate handler uses to decrypt inbound service tickets.
 Environment=KRB5_KTNAME=/etc/krb5.keytab.api
+# Host credentials for the outbound LDAP bind to FreeIPA. MIT Kerberos gets a
+# TGT from the client keytab on demand, so there is no password and no cron job.
+Environment=KRB5_CLIENT_KTNAME=/etc/krb5.keytab
+Environment=KRB5CCNAME=FILE:/run/launcher-api/krb5cc
+RuntimeDirectory=launcher-api
+Environment=FreeIpa__LdapUri=ldaps://${IPA_SERVER}:636
+Environment=FreeIpa__Realm=${REALM}
 Restart=always
 RestartSec=5
 SyslogIdentifier=launcher-api

@@ -2,6 +2,10 @@
 set -euo pipefail
 
 # Identity Server Setup: FreeIPA + Keycloak
+#
+# LEGACY: from the original 3-VM layout. Terraform no longer runs this script
+# (see provisioning.tf) -- FreeIPA now runs in a KVM guest provisioned by
+# setup-freeipa-vm.sh. Kept for reference.
 # Usage: setup-identity.sh <credentials-file>
 # Credentials file contains: DOMAIN, REALM, IPA_ADMIN_PASSWORD, IPA_DS_PASSWORD, ADMIN_USER
 
@@ -196,6 +200,19 @@ changetype: modify
 replace: krbPasswordExpiration
 krbPasswordExpiration: 20301231235959Z
 LDIF
+
+# Launcher authorization groups. The API maps these to its policies; see the
+# Authorization section of api/src/LauncherApi/appsettings.json.
+ipa group-add launcher-users    --desc="Launcher: view tools and VMs" || true
+ipa group-add launcher-vm-users --desc="Launcher: create and control VMs" || true
+ipa group-add launcher-admins   --desc="Launcher: full access" || true
+
+# Nesting works without extra code: FreeIPA expands memberOf, so a member of
+# launcher-vm-users is also seen as a member of launcher-users.
+ipa group-add-member launcher-users --groups=launcher-vm-users || true
+
+ipa group-add-member launcher-users    --users=testuser || true
+ipa group-add-member launcher-vm-users --users=launcheruser || true
 
 echo "[6/8] Service principal and test users created."
 
